@@ -1,0 +1,599 @@
+openapi: 3.0.3
+
+info:
+  title: IDSC College Management System - Finance API
+  description: REST API contract for the IDSC Finance Management System midterm project.
+  version: 1.0.0
+  license:
+    name: Educational Project
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+
+security: []
+
+tags:
+  - name: Health
+    description: API health check
+  - name: Students
+    description: Student financial information
+  - name: Assessments
+    description: Student assessments
+  - name: Payments
+    description: Student payments
+  - name: Receipts
+    description: Payment receipts
+  - name: Finance
+    description: Financial account information
+  - name: Reports
+    description: Financial reports
+
+paths:
+
+  /api/v1/health:
+    get:
+      tags:
+        - Health
+      operationId: getHealth
+      summary: Check API health
+      responses:
+        "200":
+          description: API is running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+
+  /api/v1/students:
+    get:
+      tags:
+        - Students
+      operationId: listStudents
+      summary: Get all students
+      responses:
+        "200":
+          description: List of students
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Student"
+
+  /api/v1/students/{studentId}:
+    get:
+      tags:
+        - Students
+      operationId: getStudent
+      summary: Get a student by ID
+      parameters:
+        - $ref: "#/components/parameters/StudentId"
+      responses:
+        "200":
+          description: Student found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/assessments:
+    get:
+      tags:
+        - Assessments
+      operationId: listAssessments
+      summary: Get all assessments
+      responses:
+        "200":
+          description: List of assessments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Assessment"
+
+    post:
+      tags:
+        - Assessments
+      operationId: createAssessment
+      summary: Create an assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssessmentInput"
+      responses:
+        "201":
+          description: Assessment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assessment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/assessments/{studentId}:
+    get:
+      tags:
+        - Assessments
+      operationId: getStudentAssessments
+      summary: Get assessments for a student
+      parameters:
+        - $ref: "#/components/parameters/StudentId"
+      responses:
+        "200":
+          description: Student assessments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Assessment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/payments:
+    get:
+      tags:
+        - Payments
+      operationId: listPayments
+      summary: Get all payments
+      responses:
+        "200":
+          description: List of payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+
+    post:
+      tags:
+        - Payments
+      operationId: createPayment
+      summary: Record a payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "201":
+          description: Payment recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/payments/{studentId}:
+    get:
+      tags:
+        - Payments
+      operationId: getStudentPayments
+      summary: Get payment history for a student
+      parameters:
+        - $ref: "#/components/parameters/StudentId"
+      responses:
+        "200":
+          description: Payment history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/receipts/{id}:
+    get:
+      tags:
+        - Receipts
+      operationId: getReceipt
+      summary: Get a receipt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Receipt number
+          schema:
+            type: string
+            example: OR-2026-001
+      responses:
+        "200":
+          description: Receipt found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/finance/{studentId}:
+    get:
+      tags:
+        - Finance
+      operationId: getFinanceAccount
+      summary: Get student financial account
+      parameters:
+        - $ref: "#/components/parameters/StudentId"
+      responses:
+        "200":
+          description: Financial account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceAccount"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/reports/collections:
+    get:
+      tags:
+        - Reports
+      operationId: getCollectionReport
+      summary: Get collection report
+      responses:
+        "200":
+          description: Collection report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollectionReport"
+
+  /api/v1/reports/outstanding:
+    get:
+      tags:
+        - Reports
+      operationId: getOutstandingReport
+      summary: Get outstanding balance report
+      responses:
+        "200":
+          description: Outstanding balance report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OutstandingReport"
+
+components:
+
+  parameters:
+
+    StudentId:
+      name: studentId
+      in: path
+      required: true
+      description: Student ID
+      schema:
+        type: string
+        example: "2026-001"
+
+  responses:
+
+    BadRequest:
+      description: Bad request
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: "https://example.com/problems/bad-request"
+            title: Bad Request
+            status: 400
+            detail: Invalid request data
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+          example:
+            type: "https://example.com/problems/not-found"
+            title: Not Found
+            status: 404
+            detail: The requested resource was not found
+
+  schemas:
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          example: ok
+
+    ProblemDetails:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - detail
+      properties:
+        type:
+          type: string
+          example: "https://example.com/problems/bad-request"
+        title:
+          type: string
+          example: Bad Request
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+          example: Invalid request data
+
+    Student:
+      type: object
+      required:
+        - studentId
+        - studentName
+        - program
+        - yearLevel
+        - enrollmentStatus
+      properties:
+        studentId:
+          type: string
+          example: "2026-001"
+        studentName:
+          type: string
+          example: Juan Dela Cruz
+        program:
+          type: string
+          example: BSIT
+        yearLevel:
+          type: integer
+          example: 3
+        enrollmentStatus:
+          type: string
+          example: Enrolled
+        accountStatus:
+          type: string
+          example: Partially Paid
+
+    AssessmentInput:
+      type: object
+      required:
+        - studentId
+        - academicYear
+        - semester
+      properties:
+        studentId:
+          type: string
+          example: "2026-001"
+        academicYear:
+          type: string
+          example: "2026-2027"
+        semester:
+          type: string
+          example: First Semester
+        tuitionFee:
+          type: number
+          example: 15000
+        miscellaneousFee:
+          type: number
+          example: 2000
+        laboratoryFee:
+          type: number
+          example: 1000
+        registrationFee:
+          type: number
+          example: 500
+        libraryFee:
+          type: number
+          example: 500
+        otherFees:
+          type: number
+          example: 500
+        discounts:
+          type: number
+          example: 0
+        scholarship:
+          type: number
+          example: 0
+        dueDate:
+          type: string
+          format: date
+          example: "2026-10-15"
+
+    Assessment:
+      allOf:
+        - $ref: "#/components/schemas/AssessmentInput"
+        - type: object
+          properties:
+            id:
+              type: string
+              example: ASM-2026-001
+            totalAssessment:
+              type: number
+              example: 19500
+            assessmentStatus:
+              type: string
+              example: Unpaid
+
+    PaymentInput:
+      type: object
+      required:
+        - studentId
+        - assessmentId
+        - amountPaid
+      properties:
+        studentId:
+          type: string
+          example: "2026-001"
+        assessmentId:
+          type: string
+          example: ASM-2026-001
+        amountPaid:
+          type: number
+          minimum: 0.01
+          example: 5000
+        paymentDate:
+          type: string
+          format: date
+          example: "2026-09-30"
+        paymentMethod:
+          type: string
+          enum:
+            - Cash
+            - Bank Transfer
+            - Online Payment
+            - Other
+          example: Cash
+        referenceNumber:
+          type: string
+          example: REF-2026-001
+        receiptNumber:
+          type: string
+          example: OR-2026-001
+        processedBy:
+          type: string
+          example: Finance Staff
+        remarks:
+          type: string
+          example: Partial payment
+
+    Payment:
+      allOf:
+        - $ref: "#/components/schemas/PaymentInput"
+        - type: object
+          properties:
+            paymentId:
+              type: string
+              example: PAY-2026-001
+            paymentStatus:
+              type: string
+              example: Completed
+
+    Receipt:
+      type: object
+      properties:
+        receiptNumber:
+          type: string
+          example: OR-2026-001
+        studentId:
+          type: string
+          example: "2026-001"
+        studentName:
+          type: string
+          example: Juan Dela Cruz
+        paymentDate:
+          type: string
+          format: date
+          example: "2026-09-30"
+        amount:
+          type: number
+          example: 5000
+        paymentMethod:
+          type: string
+          example: Cash
+        referenceNumber:
+          type: string
+          example: REF-2026-001
+        previousBalance:
+          type: number
+          example: 19500
+        remainingBalance:
+          type: number
+          example: 14500
+        processedBy:
+          type: string
+          example: Finance Staff
+
+    FinanceAccount:
+      type: object
+      required:
+        - studentId
+        - studentName
+        - totalAssessment
+        - totalPaid
+        - outstandingBalance
+        - accountStatus
+      properties:
+        studentId:
+          type: string
+          example: "2026-001"
+        studentName:
+          type: string
+          example: Juan Dela Cruz
+        totalAssessment:
+          type: number
+          example: 19500
+        totalPaid:
+          type: number
+          example: 5000
+        outstandingBalance:
+          type: number
+          example: 14500
+        accountStatus:
+          type: string
+          example: Outstanding
+
+    CollectionReport:
+      type: object
+      required:
+        - totalAssessment
+        - totalCollected
+        - totalOutstanding
+        - paymentCount
+        - studentCount
+      properties:
+        totalAssessment:
+          type: number
+          example: 98000
+        totalCollected:
+          type: number
+          example: 29000
+        totalOutstanding:
+          type: number
+          example: 69000
+        paymentCount:
+          type: integer
+          example: 3
+        studentCount:
+          type: integer
+          example: 4
+
+    OutstandingReport:
+      type: object
+      required:
+        - studentId
+        - studentName
+        - totalAssessment
+        - totalPaid
+        - outstandingBalance
+        - accountStatus
+      properties:
+        studentId:
+          type: string
+          example: "2026-001"
+        studentName:
+          type: string
+          example: Juan Dela Cruz
+        totalAssessment:
+          type: number
+          example: 19500
+        totalPaid:
+          type: number
+          example: 5000
+        outstandingBalance:
+          type: number
+          example: 14500
+        accountStatus:
+          type: string
+          example: Outstanding

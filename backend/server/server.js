@@ -1,44 +1,35 @@
 const express = require("express");
 const cors = require("cors");
-const connectDB = require("./db");
+const swaggerUi = require("swagger-ui-express");
+const yaml = require("js-yaml");
+const fs = require("fs");
 
-const transactionRoutes = require("./routes/transactions");
-const userRoutes = require("./routes/users");
 const studentRoutes = require("./routes/students");
 const assessmentRoutes = require("./routes/assessments");
 const paymentRoutes = require("./routes/payments");
 const receiptRoutes = require("./routes/receipts");
 const financeRoutes = require("./routes/finance");
+const reportsRoutes = require("./routes/reports");
 
 const app = express();
 const PORT = 5000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
-connectDB();
+// Swagger documentation
+const swaggerDocument = yaml.load(
+  fs.readFileSync("./openapi.yaml", "utf8")
+);
 
-// Test route
-app.get("/", (req, res) => {
-  res.json({
-    message: "IDSC Finance Management System API is running",
-  });
-});
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Health check
 app.get("/api/v1/health", (req, res) => {
   res.json({
-    status: "ok",
+    status: "ok"
   });
 });
-
-// Transaction API
-app.use("/api/v1/transactions", transactionRoutes);
-
-// User API
-app.use("/api/v1/users", userRoutes);
 
 // Student API
 app.use("/api/v1/students", studentRoutes);
@@ -55,22 +46,27 @@ app.use("/api/v1/receipts", receiptRoutes);
 // Finance API
 app.use("/api/v1/finance", financeRoutes);
 
-// Login test route
-app.post("/api/v1/login-test", (req, res) => {
-  res.json({
-    message: "Login test route is working",
+// Reports API
+app.use("/api/v1/reports", reportsRoutes);
+
+// 404 handler for unknown routes
+app.use((req, res) => {
+  res.status(404).type("application/problem+json").json({
+    type: "https://example.com/problems/not-found",
+    title: "Not Found",
+    status: 404,
+    detail: "The requested endpoint was not found"
   });
 });
 
-// Start server
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Midterm API running on http://localhost:${PORT}`);
+  console.log(`Swagger Docs: http://localhost:${PORT}/docs`);
   console.log(`Health API: http://localhost:${PORT}/api/v1/health`);
-  console.log(`User API: http://localhost:${PORT}/api/v1/users`);
-  console.log(`Login API: http://localhost:${PORT}/api/v1/users/login`);
   console.log(`Student API: http://localhost:${PORT}/api/v1/students`);
   console.log(`Assessment API: http://localhost:${PORT}/api/v1/assessments`);
   console.log(`Payment API: http://localhost:${PORT}/api/v1/payments`);
   console.log(`Receipt API: http://localhost:${PORT}/api/v1/receipts`);
   console.log(`Finance API: http://localhost:${PORT}/api/v1/finance`);
+  console.log(`Reports API: http://localhost:${PORT}/api/v1/reports`);
 });
