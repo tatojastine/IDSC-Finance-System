@@ -1,0 +1,587 @@
+openapi: 3.0.3
+
+info:
+  title: IDSC Finance Management System API
+  description: REST API for the IDSC School Finance Management System
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5000
+
+tags:
+  - name: Health
+    description: API health check
+  - name: Students
+    description: Student management
+  - name: Assessments
+    description: Student financial assessments
+  - name: Payments
+    description: Student payments
+  - name: Receipts
+    description: Payment receipts
+  - name: Finance
+    description: Student finance information
+  - name: Reports
+    description: Finance reports
+
+paths:
+
+  /api/v1/health:
+    get:
+      tags:
+        - Health
+      summary: Check API health
+      responses:
+        "200":
+          description: API is running
+
+  /api/v1/students:
+    get:
+      tags:
+        - Students
+      summary: Get all students
+      responses:
+        "200":
+          description: List of students
+
+    post:
+      tags:
+        - Students
+      summary: Create a student
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentInput"
+            example:
+              studentId: "2026-001"
+              studentName: "Juan Dela Cruz"
+              program: "BSIT"
+              academicYear: "2026-2027"
+              semester: "1st Semester"
+              accountStatus: "Active"
+      responses:
+        "201":
+          description: Student created successfully
+        "400":
+          description: Required fields are missing
+        "409":
+          description: Student ID already exists
+
+  /api/v1/students/{id}:
+    get:
+      tags:
+        - Students
+      summary: Get one student
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Student found
+        "404":
+          description: Student not found
+
+    put:
+      tags:
+        - Students
+      summary: Update a student
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentInput"
+            example:
+              studentId: "2026-001"
+              studentName: "Juan Dela Cruz Updated"
+              program: "BSIT"
+              academicYear: "2026-2027"
+              semester: "1st Semester"
+              accountStatus: "Active"
+      responses:
+        "200":
+          description: Student updated successfully
+        "404":
+          description: Student not found
+
+    delete:
+      tags:
+        - Students
+      summary: Delete a student
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Student deleted successfully
+        "404":
+          description: Student not found
+
+  /api/v1/assessments:
+    get:
+      tags:
+        - Assessments
+      summary: Get all assessments
+      responses:
+        "200":
+          description: List of assessments
+
+    post:
+      tags:
+        - Assessments
+      summary: Create an assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssessmentInput"
+            example:
+              studentId: "2026-001"
+              academicYear: "2026-2027"
+              semester: "1st Semester"
+              tuitionFee: 15000
+              miscellaneousFee: 2000
+              laboratoryFee: 1000
+              registrationFee: 500
+              libraryFee: 500
+              otherFees: 500
+              discounts: 0
+              scholarshipFinancialAssistance: 0
+              dueDate: "2026-10-30"
+              assessmentStatus: "Unpaid"
+      responses:
+        "201":
+          description: Assessment created successfully
+
+  /api/v1/assessments/{id}:
+    get:
+      tags:
+        - Assessments
+      summary: Get one assessment
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Assessment found
+        "404":
+          description: Assessment not found
+
+    put:
+      tags:
+        - Assessments
+      summary: Update an assessment
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssessmentInput"
+      responses:
+        "200":
+          description: Assessment updated successfully
+        "404":
+          description: Assessment not found
+
+    delete:
+      tags:
+        - Assessments
+      summary: Delete an assessment
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Assessment deleted successfully
+        "404":
+          description: Assessment not found
+
+  /api/v1/assessments/student/{studentId}:
+    get:
+      tags:
+        - Assessments
+      summary: Get assessments by student ID
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Student assessments
+
+  /api/v1/payments:
+    get:
+      tags:
+        - Payments
+      summary: Get all payments
+      responses:
+        "200":
+          description: List of payments
+
+    post:
+      tags:
+        - Payments
+      summary: Create a payment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "201":
+          description: Payment created successfully
+        "400":
+          description: Invalid payment
+        "409":
+          description: Duplicate payment or receipt number
+
+  /api/v1/payments/{id}:
+    get:
+      tags:
+        - Payments
+      summary: Get one payment
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Payment found
+        "404":
+          description: Payment not found
+
+    put:
+      tags:
+        - Payments
+      summary: Update a payment
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "200":
+          description: Payment updated successfully
+        "404":
+          description: Payment not found
+
+    delete:
+      tags:
+        - Payments
+      summary: Delete a payment
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Payment deleted successfully
+        "404":
+          description: Payment not found
+
+  /api/v1/payments/student/{studentId}:
+    get:
+      tags:
+        - Payments
+      summary: Get payments by student ID
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Student payments
+
+  /api/v1/receipts:
+    get:
+      tags:
+        - Receipts
+      summary: Get all receipts
+      responses:
+        "200":
+          description: List of receipts
+
+    post:
+      tags:
+        - Receipts
+      summary: Create a receipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiptInput"
+      responses:
+        "201":
+          description: Receipt created successfully
+        "400":
+          description: Invalid receipt
+        "409":
+          description: Receipt number already exists
+
+  /api/v1/receipts/{id}:
+    get:
+      tags:
+        - Receipts
+      summary: Get one receipt
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Receipt found
+        "404":
+          description: Receipt not found
+
+    put:
+      tags:
+        - Receipts
+      summary: Update a receipt
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiptInput"
+      responses:
+        "200":
+          description: Receipt updated successfully
+        "404":
+          description: Receipt not found
+
+    delete:
+      tags:
+        - Receipts
+      summary: Delete a receipt
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Receipt deleted successfully
+        "404":
+          description: Receipt not found
+
+  /api/v1/receipts/student/{studentId}:
+    get:
+      tags:
+        - Receipts
+      summary: Get receipts by student ID
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Student receipts
+
+  /api/v1/finance/{studentId}:
+    get:
+      tags:
+        - Finance
+      summary: Get student financial account
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Financial account found
+        "404":
+          description: Finance account not found
+
+  /api/v1/reports/collections:
+    get:
+      tags:
+        - Reports
+      summary: Get collections report
+      responses:
+        "200":
+          description: Collections report
+
+  /api/v1/reports/outstanding:
+    get:
+      tags:
+        - Reports
+      summary: Get outstanding balances report
+      responses:
+        "200":
+          description: Outstanding balances report
+
+components:
+
+  parameters:
+
+    Id:
+      name: id
+      in: path
+      required: true
+      description: MongoDB document ID
+      schema:
+        type: string
+
+  schemas:
+
+    StudentInput:
+      type: object
+      required:
+        - studentId
+        - studentName
+        - program
+        - academicYear
+        - semester
+      properties:
+        studentId:
+          type: string
+        studentName:
+          type: string
+        program:
+          type: string
+        academicYear:
+          type: string
+        semester:
+          type: string
+        accountStatus:
+          type: string
+          enum:
+            - Active
+            - Inactive
+
+    AssessmentInput:
+      type: object
+      required:
+        - studentId
+        - academicYear
+        - semester
+        - dueDate
+      properties:
+        studentId:
+          type: string
+        academicYear:
+          type: string
+        semester:
+          type: string
+        tuitionFee:
+          type: number
+        miscellaneousFee:
+          type: number
+        laboratoryFee:
+          type: number
+        registrationFee:
+          type: number
+        libraryFee:
+          type: number
+        otherFees:
+          type: number
+        discounts:
+          type: number
+        scholarshipFinancialAssistance:
+          type: number
+        dueDate:
+          type: string
+          format: date
+        assessmentStatus:
+          type: string
+          enum:
+            - Unpaid
+            - Partially Paid
+            - Paid
+            - Overdue
+
+    PaymentInput:
+      type: object
+      required:
+        - paymentId
+        - studentId
+        - assessmentId
+        - amountPaid
+        - paymentMethod
+        - receiptNumber
+        - processedBy
+      properties:
+        paymentId:
+          type: string
+        studentId:
+          type: string
+        assessmentId:
+          type: string
+        amountPaid:
+          type: number
+        paymentDate:
+          type: string
+          format: date-time
+        paymentMethod:
+          type: string
+          enum:
+            - Cash
+            - Bank Transfer
+            - Online Payment
+            - Other
+        referenceNumber:
+          type: string
+        receiptNumber:
+          type: string
+        processedBy:
+          type: string
+        remarks:
+          type: string
+        paymentStatus:
+          type: string
+          enum:
+            - Paid
+            - Partially Paid
+            - Pending
+            - Cancelled
+
+    ReceiptInput:
+      type: object
+      required:
+        - receiptNumber
+        - paymentId
+        - studentId
+        - studentName
+        - amountPaid
+        - paymentMethod
+        - previousBalance
+        - remainingBalance
+        - processedBy
+      properties:
+        receiptNumber:
+          type: string
+        paymentId:
+          type: string
+        studentId:
+          type: string
+        studentName:
+          type: string
+        paymentDate:
+          type: string
+          format: date-time
+        amountPaid:
+          type: number
+        paymentMethod:
+          type: string
+          enum:
+            - Cash
+            - Bank Transfer
+            - Online Payment
+            - Other
+        referenceNumber:
+          type: string
+        previousBalance:
+          type: number
+        remainingBalance:
+          type: number
+        processedBy:
+          type: string

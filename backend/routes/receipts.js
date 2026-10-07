@@ -127,6 +127,92 @@ router.post("/", async (req, res) => {
   }
 });
 
+// UPDATE receipt
+router.put("/:id", async (req, res) => {
+  try {
+    const {
+      receiptNumber,
+      paymentId,
+      studentId,
+      studentName,
+      paymentDate,
+      amountPaid,
+      paymentMethod,
+      referenceNumber,
+      previousBalance,
+      remainingBalance,
+      processedBy
+    } = req.body;
+
+    if (
+      !receiptNumber ||
+      !paymentId ||
+      !studentId ||
+      !studentName ||
+      amountPaid === undefined ||
+      !paymentMethod ||
+      previousBalance === undefined ||
+      remainingBalance === undefined ||
+      !processedBy
+    ) {
+      return res.status(400).json({
+        message: "All required receipt fields must be provided"
+      });
+    }
+
+    if (amountPaid <= 0) {
+      return res.status(400).json({
+        message: "Amount paid must be greater than zero"
+      });
+    }
+
+    const existingReceipt = await Receipt.findOne({
+      receiptNumber,
+      _id: { $ne: req.params.id }
+    });
+
+    if (existingReceipt) {
+      return res.status(409).json({
+        message: "Receipt number already exists"
+      });
+    }
+
+    const receipt = await Receipt.findByIdAndUpdate(
+      req.params.id,
+      {
+        receiptNumber,
+        paymentId,
+        studentId,
+        studentName,
+        paymentDate,
+        amountPaid,
+        paymentMethod,
+        referenceNumber,
+        previousBalance,
+        remainingBalance,
+        processedBy
+      },
+      {
+        new: true,
+        runValidators: true
+      }
+    );
+
+    if (!receipt) {
+      return res.status(404).json({
+        message: "Receipt not found"
+      });
+    }
+
+    res.json(receipt);
+  } catch (error) {
+    res.status(500).json({
+      message: "Failed to update receipt",
+      error: error.message
+    });
+  }
+});
+
 // DELETE receipt
 router.delete("/:id", async (req, res) => {
   try {
