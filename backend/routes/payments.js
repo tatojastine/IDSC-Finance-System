@@ -1,3 +1,4 @@
+
 const express = require("express");
 const router = express.Router();
 
@@ -8,11 +9,12 @@ router.get("/", async (req, res) => {
   try {
     const payments = await Payment.find().sort({ createdAt: -1 });
 
-    res.json(payments);
+    return res.status(200).json(payments);
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch payments",
-      error: error.message
+    console.error("Failed to fetch payments:", error);
+
+    return res.status(500).json({
+      message: "Failed to fetch payments"
     });
   }
 });
@@ -24,11 +26,12 @@ router.get("/student/:studentId", async (req, res) => {
       studentId: req.params.studentId
     }).sort({ createdAt: -1 });
 
-    res.json(payments);
+    return res.status(200).json(payments);
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch student payments",
-      error: error.message
+    console.error("Failed to fetch student payments:", error);
+
+    return res.status(500).json({
+      message: "Failed to fetch student payments"
     });
   }
 });
@@ -44,11 +47,18 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    res.json(payment);
+    return res.status(200).json(payment);
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch payment",
-      error: error.message
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        message: "Invalid payment ID"
+      });
+    }
+
+    console.error("Failed to fetch payment:", error);
+
+    return res.status(500).json({
+      message: "Failed to fetch payment"
     });
   }
 });
@@ -70,11 +80,14 @@ router.post("/", async (req, res) => {
       paymentStatus
     } = req.body;
 
+    // Validate required fields
     if (
       !paymentId ||
       !studentId ||
       !assessmentId ||
       amountPaid === undefined ||
+      amountPaid === null ||
+      amountPaid === "" ||
       !paymentMethod ||
       !receiptNumber ||
       !processedBy
@@ -84,12 +97,16 @@ router.post("/", async (req, res) => {
       });
     }
 
-    if (amountPaid <= 0) {
+    // Validate payment amount
+    const parsedAmount = Number(amountPaid);
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
       return res.status(400).json({
-        message: "Payment amount must be greater than zero"
+        message: "Payment amount must be a number greater than zero"
       });
     }
 
+    // Check duplicate payment ID
     const existingPaymentId = await Payment.findOne({ paymentId });
 
     if (existingPaymentId) {
@@ -98,9 +115,8 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const existingReceipt = await Payment.findOne({
-      receiptNumber
-    });
+    // Check duplicate receipt number
+    const existingReceipt = await Payment.findOne({ receiptNumber });
 
     if (existingReceipt) {
       return res.status(409).json({
@@ -112,7 +128,7 @@ router.post("/", async (req, res) => {
       paymentId,
       studentId,
       assessmentId,
-      amountPaid,
+      amountPaid: parsedAmount,
       paymentDate,
       paymentMethod,
       referenceNumber,
@@ -124,11 +140,19 @@ router.post("/", async (req, res) => {
 
     const savedPayment = await payment.save();
 
-    res.status(201).json(savedPayment);
+    return res.status(201).json(savedPayment);
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to create payment",
-      error: error.message
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        message: "Invalid payment data",
+        errors: Object.values(error.errors).map((item) => item.message)
+      });
+    }
+
+    console.error("Failed to create payment:", error);
+
+    return res.status(500).json({
+      message: "Failed to create payment"
     });
   }
 });
@@ -150,12 +174,7 @@ router.put("/:id", async (req, res) => {
       paymentStatus
     } = req.body;
 
-    if (amountPaid !== undefined && amountPaid <= 0) {
-      return res.status(400).json({
-        message: "Payment amount must be greater than zero"
-      });
-    }
-
+    // Find existing payment
     const payment = await Payment.findById(req.params.id);
 
     if (!payment) {
@@ -164,47 +183,86 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    payment.paymentId = paymentId;
-    payment.studentId = studentId;
-    payment.assessmentId = assessmentId;
-    payment.amountPaid = amountPaid;
-    payment.paymentDate = paymentDate;
-    payment.paymentMethod = paymentMethod;
-    payment.referenceNumber = referenceNumber;
-    payment.receiptNumber = receiptNumber;
-    payment.processedBy = processedBy;
-    payment.remarks = remarks;
-    payment.paymentStatus = paymentStatus;
+    // Validate amount if provided
+    if (amountPaid !== undefined) {
+      const parsedAmount = Number(amountPaid);
+
+      if (
+        amountPaid === null ||
+        amountPaid === "" ||
+        !Number.isFinite(parsedAmount) ||
+        parsedAmount <= 0
+      ) {
+        return res.status(400).json({
+          message: "Payment amount must be a number greater than zero"
+        });
+      }
+
+      payment.amountPaid = parsedAmount;
+    }
+
+    // Check duplicate payment ID if changed
+    if (paymentId !== undefined && paymentId !== payment.paymentId) {
+      const existingPaymentId = await Payment.findOne({ paymentId });
+
+      if (existingPaymentId) {
+        return res.status(409).json({
+          message: "Payment ID already exists"
+        });
+      }
+
+      payment.paymentId = paymentId;
+    }
+
+    // Check duplicate receipt number if changed
+    if (
+      receiptNumber !== undefined &&
+      receiptNumber !== payment.receiptNumber
+    ) {
+      const existingReceipt = await Payment.findOne({ receiptNumber });
+
+      if (existingReceipt) {
+        return res.status(409).json({
+          message: "Receipt number already exists"
+        });
+      }
+
+      payment.receiptNumber = receiptNumber;
+    }
+
+    // Update only fields included in the request
+    if (studentId !== undefined) payment.studentId = studentId;
+    if (assessmentId !== undefined) payment.assessmentId = assessmentId;
+    if (paymentDate !== undefined) payment.paymentDate = paymentDate;
+    if (paymentMethod !== undefined) payment.paymentMethod = paymentMethod;
+    if (referenceNumber !== undefined) {
+      payment.referenceNumber = referenceNumber;
+    }
+    if (processedBy !== undefined) payment.processedBy = processedBy;
+    if (remarks !== undefined) payment.remarks = remarks;
+    if (paymentStatus !== undefined) payment.paymentStatus = paymentStatus;
 
     const updatedPayment = await payment.save();
 
-    res.json(updatedPayment);
+    return res.status(200).json(updatedPayment);
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to update payment",
-      error: error.message
-    });
-  }
-});
-
-// DELETE payment
-router.delete("/:id", async (req, res) => {
-  try {
-    const payment = await Payment.findByIdAndDelete(req.params.id);
-
-    if (!payment) {
-      return res.status(404).json({
-        message: "Payment not found"
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        message: "Invalid payment ID or field value"
       });
     }
 
-    res.json({
-      message: "Payment deleted successfully"
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Failed to delete payment",
-      error: error.message
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        message: "Invalid payment data",
+        errors: Object.values(error.errors).map((item) => item.message)
+      });
+    }
+
+    console.error("Failed to update payment:", error);
+
+    return res.status(500).json({
+      message: "Failed to update payment"
     });
   }
 });

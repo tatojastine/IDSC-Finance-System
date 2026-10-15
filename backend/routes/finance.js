@@ -1,3 +1,4 @@
+
 const express = require("express");
 const router = express.Router();
 
@@ -8,12 +9,23 @@ const Payment = require("../models/Payment");
 // GET student financial account
 router.get("/:studentId", async (req, res) => {
   try {
-    const studentId = req.params.studentId;
+    const { studentId } = req.params;
 
-    // Check if student exists
-    const student = await Student.findOne({
-      studentId
-    });
+    // Validate student ID
+    if (!studentId || !studentId.trim()) {
+      return res
+        .status(400)
+        .type("application/problem+json")
+        .json({
+          type: "https://example.com/problems/invalid-student-id",
+          title: "Bad Request",
+          status: 400,
+          detail: "A valid student ID is required"
+        });
+    }
+
+    // Find student
+    const student = await Student.findOne({ studentId });
 
     if (!student) {
       return res
@@ -23,34 +35,30 @@ router.get("/:studentId", async (req, res) => {
           type: "https://example.com/problems/finance-account-not-found",
           title: "Finance Account Not Found",
           status: 404,
-          detail: "Finance account not found for this student"
+          detail: `No finance account was found for student ${studentId}`
         });
     }
 
-    // Get all assessments for the student
-    const assessments = await Assessment.find({
-      studentId
-    }).sort({ createdAt: -1 });
+    // Get student assessments
+    const assessments = await Assessment.find({ studentId }).sort({
+      createdAt: -1
+    });
 
-    // Get all non-cancelled payments
+    // Get student payments, excluding cancelled payments
     const payments = await Payment.find({
       studentId,
       paymentStatus: { $ne: "Cancelled" }
     }).sort({ createdAt: -1 });
 
     // Calculate total assessment
-    const totalAssessment = assessments.reduce(
-      (total, assessment) =>
-        total + assessment.totalAssessment,
-      0
-    );
+    const totalAssessment = assessments.reduce((total, assessment) => {
+      return total + (Number(assessment.totalAssessment) || 0);
+    }, 0);
 
     // Calculate total paid
-    const totalPaid = payments.reduce(
-      (total, payment) =>
-        total + payment.amountPaid,
-      0
-    );
+    const totalPaid = payments.reduce((total, payment) => {
+      return total + (Number(payment.amountPaid) || 0);
+    }, 0);
 
     // Calculate outstanding balance
     const outstandingBalance = Math.max(
@@ -58,7 +66,7 @@ router.get("/:studentId", async (req, res) => {
       totalAssessment - totalPaid
     );
 
-    // Determine account status
+    // Determine financial account status
     let accountStatus = "Unpaid";
 
     if (totalAssessment === 0) {
@@ -69,15 +77,14 @@ router.get("/:studentId", async (req, res) => {
       accountStatus = "Partially Paid";
     }
 
-    // Return financial account
-    res.json({
+    // Return financial account information
+    return res.status(200).json({
       student: {
         studentId: student.studentId,
         studentName: student.studentName,
         program: student.program,
         academicYear: student.academicYear,
-        semester: student.semester,
-        accountStatus: student.accountStatus
+        semester: student.semester
       },
       finance: {
         totalAssessment,
@@ -89,10 +96,17 @@ router.get("/:studentId", async (req, res) => {
       payments
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch student financial account",
-      error: error.message
-    });
+    console.error("Failed to fetch student financial account:", error);
+
+    return res
+      .status(500)
+      .type("application/problem+json")
+      .json({
+        type: "https://example.com/problems/internal-server-error",
+        title: "Internal Server Error",
+        status: 500,
+        detail: "Failed to fetch student financial account"
+      });
   }
 });
 
