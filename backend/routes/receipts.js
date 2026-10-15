@@ -1,3 +1,4 @@
+
 const express = require("express");
 const router = express.Router();
 
@@ -8,11 +9,12 @@ router.get("/", async (req, res) => {
   try {
     const receipts = await Receipt.find().sort({ createdAt: -1 });
 
-    res.json(receipts);
+    return res.status(200).json(receipts);
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch receipts",
-      error: error.message
+    console.error("Failed to fetch receipts:", error);
+
+    return res.status(500).json({
+      message: "Failed to fetch receipts"
     });
   }
 });
@@ -24,11 +26,12 @@ router.get("/student/:studentId", async (req, res) => {
       studentId: req.params.studentId
     }).sort({ createdAt: -1 });
 
-    res.json(receipts);
+    return res.status(200).json(receipts);
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch student receipts",
-      error: error.message
+    console.error("Failed to fetch student receipts:", error);
+
+    return res.status(500).json({
+      message: "Failed to fetch student receipts"
     });
   }
 });
@@ -44,11 +47,18 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    res.json(receipt);
+    return res.status(200).json(receipt);
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to fetch receipt",
-      error: error.message
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        message: "Invalid receipt ID"
+      });
+    }
+
+    console.error("Failed to fetch receipt:", error);
+
+    return res.status(500).json({
+      message: "Failed to fetch receipt"
     });
   }
 });
@@ -70,15 +80,22 @@ router.post("/", async (req, res) => {
       processedBy
     } = req.body;
 
+    // Validate required fields
     if (
       !receiptNumber ||
       !paymentId ||
       !studentId ||
       !studentName ||
       amountPaid === undefined ||
+      amountPaid === null ||
+      amountPaid === "" ||
       !paymentMethod ||
       previousBalance === undefined ||
+      previousBalance === null ||
+      previousBalance === "" ||
       remainingBalance === undefined ||
+      remainingBalance === null ||
+      remainingBalance === "" ||
       !processedBy
     ) {
       return res.status(400).json({
@@ -86,15 +103,26 @@ router.post("/", async (req, res) => {
       });
     }
 
-    if (amountPaid <= 0) {
+    // Validate numeric amounts
+    const parsedAmount = Number(amountPaid);
+    const parsedPreviousBalance = Number(previousBalance);
+    const parsedRemainingBalance = Number(remainingBalance);
+
+    if (
+      !Number.isFinite(parsedAmount) ||
+      parsedAmount <= 0 ||
+      !Number.isFinite(parsedPreviousBalance) ||
+      parsedPreviousBalance < 0 ||
+      !Number.isFinite(parsedRemainingBalance) ||
+      parsedRemainingBalance < 0
+    ) {
       return res.status(400).json({
-        message: "Amount paid must be greater than zero"
+        message: "Receipt amounts must be valid numbers. Amount paid must be greater than zero, and balances cannot be negative."
       });
     }
 
-    const existingReceipt = await Receipt.findOne({
-      receiptNumber
-    });
+    // Check duplicate receipt number
+    const existingReceipt = await Receipt.findOne({ receiptNumber });
 
     if (existingReceipt) {
       return res.status(409).json({
@@ -108,21 +136,29 @@ router.post("/", async (req, res) => {
       studentId,
       studentName,
       paymentDate,
-      amountPaid,
+      amountPaid: parsedAmount,
       paymentMethod,
       referenceNumber,
-      previousBalance,
-      remainingBalance,
+      previousBalance: parsedPreviousBalance,
+      remainingBalance: parsedRemainingBalance,
       processedBy
     });
 
     const savedReceipt = await receipt.save();
 
-    res.status(201).json(savedReceipt);
+    return res.status(201).json(savedReceipt);
   } catch (error) {
-    res.status(500).json({
-      message: "Failed to create receipt",
-      error: error.message
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        message: "Invalid receipt data",
+        errors: Object.values(error.errors).map((item) => item.message)
+      });
+    }
+
+    console.error("Failed to create receipt:", error);
+
+    return res.status(500).json({
+      message: "Failed to create receipt"
     });
   }
 });
@@ -144,15 +180,31 @@ router.put("/:id", async (req, res) => {
       processedBy
     } = req.body;
 
+    // Find receipt first
+    const receipt = await Receipt.findById(req.params.id);
+
+    if (!receipt) {
+      return res.status(404).json({
+        message: "Receipt not found"
+      });
+    }
+
+    // Validate required fields
     if (
       !receiptNumber ||
       !paymentId ||
       !studentId ||
       !studentName ||
       amountPaid === undefined ||
+      amountPaid === null ||
+      amountPaid === "" ||
       !paymentMethod ||
       previousBalance === undefined ||
+      previousBalance === null ||
+      previousBalance === "" ||
       remainingBalance === undefined ||
+      remainingBalance === null ||
+      remainingBalance === "" ||
       !processedBy
     ) {
       return res.status(400).json({
@@ -160,12 +212,25 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    if (amountPaid <= 0) {
+    // Validate numeric amounts
+    const parsedAmount = Number(amountPaid);
+    const parsedPreviousBalance = Number(previousBalance);
+    const parsedRemainingBalance = Number(remainingBalance);
+
+    if (
+      !Number.isFinite(parsedAmount) ||
+      parsedAmount <= 0 ||
+      !Number.isFinite(parsedPreviousBalance) ||
+      parsedPreviousBalance < 0 ||
+      !Number.isFinite(parsedRemainingBalance) ||
+      parsedRemainingBalance < 0
+    ) {
       return res.status(400).json({
-        message: "Amount paid must be greater than zero"
+        message: "Receipt amounts must be valid numbers. Amount paid must be greater than zero, and balances cannot be negative."
       });
     }
 
+    // Check duplicate receipt number
     const existingReceipt = await Receipt.findOne({
       receiptNumber,
       _id: { $ne: req.params.id }
@@ -177,60 +242,40 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    const receipt = await Receipt.findByIdAndUpdate(
-      req.params.id,
-      {
-        receiptNumber,
-        paymentId,
-        studentId,
-        studentName,
-        paymentDate,
-        amountPaid,
-        paymentMethod,
-        referenceNumber,
-        previousBalance,
-        remainingBalance,
-        processedBy
-      },
-      {
-        new: true,
-        runValidators: true
-      }
-    );
+    // Update receipt
+    receipt.receiptNumber = receiptNumber;
+    receipt.paymentId = paymentId;
+    receipt.studentId = studentId;
+    receipt.studentName = studentName;
+    receipt.paymentDate = paymentDate;
+    receipt.amountPaid = parsedAmount;
+    receipt.paymentMethod = paymentMethod;
+    receipt.referenceNumber = referenceNumber;
+    receipt.previousBalance = parsedPreviousBalance;
+    receipt.remainingBalance = parsedRemainingBalance;
+    receipt.processedBy = processedBy;
 
-    if (!receipt) {
-      return res.status(404).json({
-        message: "Receipt not found"
+    const updatedReceipt = await receipt.save();
+
+    return res.status(200).json(updatedReceipt);
+  } catch (error) {
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        message: "Invalid receipt ID or field value"
       });
     }
 
-    res.json(receipt);
-  } catch (error) {
-    res.status(500).json({
-      message: "Failed to update receipt",
-      error: error.message
-    });
-  }
-});
-
-// DELETE receipt
-router.delete("/:id", async (req, res) => {
-  try {
-    const receipt = await Receipt.findByIdAndDelete(req.params.id);
-
-    if (!receipt) {
-      return res.status(404).json({
-        message: "Receipt not found"
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        message: "Invalid receipt data",
+        errors: Object.values(error.errors).map((item) => item.message)
       });
     }
 
-    res.json({
-      message: "Receipt deleted successfully"
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Failed to delete receipt",
-      error: error.message
+    console.error("Failed to update receipt:", error);
+
+    return res.status(500).json({
+      message: "Failed to update receipt"
     });
   }
 });
