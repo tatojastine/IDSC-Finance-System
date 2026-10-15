@@ -1,4 +1,4 @@
-
+import SalaryManagement from "./SalaryManagement.jsx";
 import React, { useMemo, useState } from "react";
 import {
   LayoutDashboard,
@@ -127,6 +127,7 @@ const navigation = [
   ["Dashboard", LayoutDashboard],
   ["Students", Users],
   ["Payments", WalletCards],
+  ["Salary Management", Banknote],
   ["Expenses", ReceiptText],
   ["Reports", ChartNoAxesCombined],
   ["Settings", SettingsIcon],
@@ -1511,6 +1512,12 @@ function App() {
                 onDelete={deleteTransaction}
               />
             </section>
+          )}
+
+          {/* SALARY MANAGEMENT */}
+          
+          {active === "Salary Management" && (
+            <SalaryManagement />
           )}
 
           {/* EXPENSES */}
