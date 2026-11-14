@@ -113,47 +113,86 @@ button {
   padding: 22px 16px;
 }
 
+
+/* SIDEBAR NAVIGATION IMPROVEMENTS */
+
 .nav-item {
-  width: 100%;
-  height: 57px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 0 22px;
-  background: transparent;
-  color: #858585;
-  border-radius: 10px;
-  margin-bottom: 8px;
-  font-size: 16px;
-  text-align: left;
-  position: relative;
+  min-height: 52px;
+  height: auto;
+  padding: 13px 20px;
+  margin-bottom: 7px;
+  border-radius: 12px;
+  gap: 15px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #668078;
+  transition: background 0.2s ease, color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .nav-item svg {
-  stroke-width: 1.8;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  stroke-width: 1.9;
 }
 
 .nav-item:hover {
-  background: #ebede7;
-  color: #515151;
+  background: #c5e4d7;
+  color: #087f5b;
+  transform: translateX(3px);
 }
 
 .nav-item.active {
-  color: #24262b;
+  background: #087f5b;
+  color: #ffffff;
   font-weight: 600;
-  background: transparent;
+  box-shadow: 0 4px 10px rgba(8, 127, 91, 0.15);
 }
 
 .nav-item.active::after {
-  content: "";
-  position: absolute;
-  width: 7px;
-  height: 39px;
-  right: -16px;
-  top: 9px;
-  background: var(--navy);
-  border-radius: 6px 0 0 6px;
+  display: none;
 }
+
+.nav-item.logout {
+  color: #b54747;
+}
+
+.nav-item.logout:hover {
+  background: #fbeaea;
+  color: #a52f2f;
+}
+
+/* SIDEBAR BRAND AREA */
+
+.brand-wrap {
+  padding-bottom: 8px;
+}
+
+.sidebar nav {
+  padding: 18px 14px;
+}
+
+/* HELP CARD */
+
+.help-card {
+  border-radius: 14px;
+  margin: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+/* ADMIN PROFILE */
+
+.profile-mini {
+  border-radius: 12px;
+  transition: background 0.2s ease;
+}
+
+.profile-mini:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
 
 /* =========================
    MAIN
@@ -1382,5 +1421,129 @@ button {
 
   .login-header h2 {
     font-size: 24px;
+  }
+}
+
+/* =================================
+   IDSC FRONTEND POLISH
+   Keeps the original green theme
+================================= */
+
+
+/* Dashboard cards */
+.stat-card {
+border-radius: 18px;
+border: 1px solid #d5e8df;
+box-shadow: 0 4px 14px rgba(8, 127, 91, 0.05);
+transition: all 0.25s ease;
+}
+
+.stat-card:hover {
+transform: translateY(-4px);
+box-shadow: 0 10px 24px rgba(8, 127, 91, 0.12);
+}
+
+/* Dashboard panels */
+.panel {
+border-radius: 18px;
+border: 1px solid #d5e8df;
+box-shadow: 0 4px 15px rgba(8, 127, 91, 0.04);
+}
+
+/* Navigation */
+.nav-item {
+border-radius: 12px;
+transition: all 0.2s ease;
+}
+
+.nav-item:focus-visible,
+button:focus-visible,
+input:focus-visible {
+outline: 3px solid rgba(8, 127, 91, 0.35);
+outline-offset: 3px;
+}
+
+/* Page headings */
+.page-heading h1 {
+letter-spacing: -0.7px;
+color: #087f5b;
+}
+
+/* Tables */
+.table-wrap {
+width: 100%;
+overflow-x: auto;
+border-radius: 12px;
+}
+
+table {
+border-collapse: collapse;
+width: 100%;
+}
+
+th {
+background: #e8f5ef;
+color: #056044;
+font-weight: 600;
+padding: 14px;
+text-align: left;
+}
+
+td {
+padding: 14px;
+border-bottom: 1px solid #e5eee9;
+}
+
+tbody tr:hover {
+background: #f5faf7;
+}
+
+/* Better mobile spacing */
+@media (max-width: 768px) {
+.content {
+padding: 20px 16px 35px;
+}
+
+.stats-grid {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+gap: 14px;
+}
+
+.dashboard-grid {
+grid-template-columns: 1fr;
+}
+
+.panel {
+padding: 18px;
+}
+}
+
+@media (max-width: 480px) {
+.stats-grid {
+grid-template-columns: 1fr;
+}
+}
+
+
+/* MOBILE SIDEBAR FIX */
+
+@media (max-width: 800px) {
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    box-shadow: 5px 0 20px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Match the class used in App.jsx */
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .sidebar nav {
+    padding: 18px 14px;
+  }
+
+  .nav-item {
+    min-height: 50px;
   }
 }
