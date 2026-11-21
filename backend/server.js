@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
@@ -51,7 +52,7 @@ app.use("/api/v1/finance", financeRoutes);
 // Reports API
 app.use("/api/v1/reports", reportsRoutes);
 
-// 404 handler
+// 404 handler for unknown routes
 app.use((req, res) => {
   res.status(404).type("application/problem+json").json({
     type: "https://example.com/problems/not-found",
@@ -61,13 +62,11 @@ app.use((req, res) => {
   });
 });
 
-// Connect MongoDB first, then start server
-const startServer = async () => {
-  try {
-    await connectDB();
-
+// Connect to MongoDB before starting the server
+connectDB()
+  .then(() => {
     app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Midterm API running on http://localhost:${PORT}`);
       console.log(`Swagger Docs: http://localhost:${PORT}/docs`);
       console.log(`Health API: http://localhost:${PORT}/api/v1/health`);
       console.log(`Student API: http://localhost:${PORT}/api/v1/students`);
@@ -77,10 +76,8 @@ const startServer = async () => {
       console.log(`Finance API: http://localhost:${PORT}/api/v1/finance`);
       console.log(`Reports API: http://localhost:${PORT}/api/v1/reports`);
     });
-  } catch (error) {
-    console.error("Failed to start server:", error.message);
+  })
+  .catch((error) => {
+    console.error("Server startup failed:", error.message);
     process.exit(1);
-  }
-};
-
-startServer();
+  });

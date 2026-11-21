@@ -1,3 +1,5 @@
+
+const connectDB = require("./db");
 const express = require("express");
 const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
@@ -59,14 +61,22 @@ app.use((req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Midterm API running on http://localhost:${PORT}`);
-  console.log(`Swagger Docs: http://localhost:${PORT}/docs`);
-  console.log(`Health API: http://localhost:${PORT}/api/v1/health`);
-  console.log(`Student API: http://localhost:${PORT}/api/v1/students`);
-  console.log(`Assessment API: http://localhost:${PORT}/api/v1/assessments`);
-  console.log(`Payment API: http://localhost:${PORT}/api/v1/payments`);
-  console.log(`Receipt API: http://localhost:${PORT}/api/v1/receipts`);
-  console.log(`Finance API: http://localhost:${PORT}/api/v1/finance`);
-  console.log(`Reports API: http://localhost:${PORT}/api/v1/reports`);
-});
+// Connect to MongoDB before starting the server
+connectDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Midterm API running on http://localhost:${PORT}`);
+      console.log(`Swagger Docs: http://localhost:${PORT}/docs`);
+      console.log(`Health API: http://localhost:${PORT}/api/v1/health`);
+      console.log(`Student API: http://localhost:${PORT}/api/v1/students`);
+      console.log(`Assessment API: http://localhost:${PORT}/api/v1/assessments`);
+      console.log(`Payment API: http://localhost:${PORT}/api/v1/payments`);
+      console.log(`Receipt API: http://localhost:${PORT}/api/v1/receipts`);
+      console.log(`Finance API: http://localhost:${PORT}/api/v1/finance`);
+      console.log(`Reports API: http://localhost:${PORT}/api/v1/reports`);
+    });
+  })
+  .catch((error) => {
+    console.error("Server startup failed:", error.message);
+    process.exit(1);
+  });

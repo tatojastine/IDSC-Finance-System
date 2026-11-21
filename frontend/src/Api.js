@@ -1,65 +1,60 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-export async function getDashboardData() {
-  try {
-    const response = await fetch(`${API_URL}/dashboard`);
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1";
 
-    if (!response.ok) {
-      throw new Error("Unable to connect to API");
-    }
+// GET STUDENTS FROM MONGODB
+export async function getStudents() {
+  const response = await fetch(`${API_URL}/students`);
 
-    return await response.json();
-  } catch (error) {
-    console.warn("Using demo dashboard data:", error.message);
-
-    return {
-      statistics: {
-        students: 1260,
-        teachers: 224,
-        parents: 840,
-        earnings: 54000,
-      },
-
-      earnings: [
-        { month: "Jan", earnings: 38000, expense: 46000 },
-        { month: "Feb", earnings: 15000, expense: 28000 },
-        { month: "Mar", earnings: 30000, expense: 38000 },
-        { month: "Apr", earnings: 8000, expense: 51000 },
-        { month: "May", earnings: 25000, expense: 30000 },
-        { month: "Jun", earnings: 9000, expense: 12000 },
-        { month: "Jul", earnings: 15000, expense: 18000 },
-        { month: "Aug", earnings: 28000, expense: 35000 },
-        { month: "Sep", earnings: 22000, expense: 44000 },
-        { month: "Oct", earnings: 38000, expense: 12000 },
-        { month: "Nov", earnings: 17000, expense: 21000 },
-        { month: "Dec", earnings: 39000, expense: 27000 },
-      ],
-
-      studentsGender: {
-        male: 55,
-        female: 45,
-      },
-
-      notices: [
-        {
-          title: "Inter-school competition",
-          description: "sports/singing/drawing/drama",
-          date: "10 Feb, 2023",
-          views: "7k",
-        },
-        {
-          title: "Disciplinary action if school",
-          description: "discipline is not followed",
-          date: "6 Feb, 2023",
-          views: "7k",
-        },
-        {
-          title: "Parent-teacher meeting",
-          description: "Monthly academic consultation",
-          date: "3 Feb, 2023",
-          views: "5k",
-        },
-      ],
-    };
+  if (!response.ok) {
+    throw new Error("Unable to load students from the backend.");
   }
+
+  const data = await response.json();
+
+  return data.map((student) => ({
+    id: student.studentId,
+    name: student.studentName,
+    course: student.program,
+    year: `${student.academicYear} - ${student.semester}`,
+    status: student.accountStatus,
+  }));
+}
+
+// GET PAYMENTS FROM MONGODB
+export async function getPayments() {
+  const response = await fetch(`${API_URL}/payments`);
+
+  if (!response.ok) {
+    throw new Error("Unable to load payments from the backend.");
+  }
+
+  const data = await response.json();
+
+  return data.map((payment) => ({
+    id: payment.paymentId,
+    student: payment.studentId,
+    type: "Payment",
+    amount: payment.amountPaid,
+    date: payment.paymentDate
+      ? new Date(payment.paymentDate).toLocaleDateString("en-US", {
+          month: "short",
+          day: "2-digit",
+          year: "numeric",
+        })
+      : "",
+    status: payment.paymentStatus,
+    method: payment.paymentMethod,
+  }));
+}
+
+// CHECK BACKEND CONNECTION
+export async function checkBackendConnection() {
+  const response = await fetch(`${API_URL}/health`);
+
+  if (!response.ok) {
+    throw new Error("Backend connection failed.");
+  }
+
+  return await response.json();
 }
