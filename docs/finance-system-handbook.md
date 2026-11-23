@@ -132,11 +132,11 @@ flowchart LR
 
 **Student ID and term** identify an enrollment. A MongoDB enrollment ID connects it to **charges**. Each charge holds its **payments** and **reversal history**, and a payment ID determines its receipt reference. A document revision check prevents simultaneous updates from overspending the same charge even on the local standalone MongoDB container. Request IDs allow safe replay. Money is kept as integer centavos. For example, ₱4,000.00 is `400000`.
 
-MongoDB also stores accounts and expiring session records. Passwords are hashed with bcrypt, and the server stores hashed session tokens and recovery codes. The session cookie is HTTP-only. Partner integrations use separate bearer tokens from server to server. Production hosting and external source-system access are separate setup work.
+MongoDB also stores accounts and expiring session records. Passwords are hashed with bcrypt, and the server stores hashes of signed JWTs and recovery codes. The browser receives its JWT in an HttpOnly cookie. API clients can request bearer transport. Protected requests check the token and the current session and role in MongoDB. Partner integrations use separate bearer tokens from server to server.
 
 ## 7. Backend API reference
 
-All paths below are relative to `http://localhost:5000/api/v1`. **Session** means an active owner or cashier cookie. Owner-only routes verify the role on the server. A partner token only grants access to that partner’s routes. Use the [Swagger reference](http://localhost:5000/docs/) for input schemas and the current API response contract.
+All paths below are relative to `http://localhost:5000/api/v1`. **Session** means a valid JWT from an active owner or cashier, sent in the browser cookie or bearer header. Owner-only routes verify the role on the server. A partner token only grants access to that partner’s routes. Use the Swagger reference for input schemas and the current API response contract. [Local Swagger](http://localhost:5000/docs/)
 
 ### Account access
 
@@ -146,9 +146,9 @@ All paths below are relative to `http://localhost:5000/api/v1`. **Session** mean
 | `GET /auth/setup` | Public | Returns whether owner setup is required and how many cashier slots are open. |
 | `POST /auth/setup` | First run | Creates the owner using email and password and returns a one-time recovery code. |
 | `POST /auth/register` | Public after setup | Requests a pending cashier account and returns its recovery code. |
-| `POST /auth/login` | Public | Verifies credentials and starts an active account session. |
+| `POST /auth/login` | Public | Verifies credentials and issues a signed JWT. Use `tokenTransport: bearer` to receive the token in JSON. |
 | `GET /auth/session` | Session | Returns the current account’s ID, email, role and status. |
-| `POST /auth/logout` | Current browser | Clears the session cookie and removes its server session. |
+| `POST /auth/logout` | Current session | Revokes the presented JWT and clears the session cookie. |
 | `POST /auth/reset-password` | Recovery code holder | Resets the password and returns a replacement code. |
 | `POST /auth/recovery-code` | Session and current password | Replaces the caller’s recovery code. |
 | `GET /auth/cashiers` | Owner | Lists cashier states. |

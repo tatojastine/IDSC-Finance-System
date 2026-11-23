@@ -1,0 +1,79 @@
+name: Finance CI and deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mongo:
+        image: mongo:8.0.16
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok'"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+      - run: npm ci --prefix frontend
+      - run: npm ci --prefix backend
+      - run: npm run --prefix frontend lint
+      - run: npm run --prefix frontend build
+      - run: npm test --prefix backend
+        env:
+          FINANCE_TEST_MONGO: mongodb://127.0.0.1:27017
+      - run: docker build -t idsc-finance:ci .
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: finance-deploy-main
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy the tested revision and verify readiness
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          FINANCE_LIVE_URL: ${{ vars.FINANCE_LIVE_URL }}
+        run: |
+          set -euo pipefail
+          current_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [[ "$current_main" != "$GITHUB_SHA" ]]; then
+            echo "A newer main revision superseded this run."
+            exit 0
+          fi
+          if [[ "$RENDER_DEPLOY_HOOK_URL" != https://api.render.com/deploy/* || "$FINANCE_LIVE_URL" != https://* ]]; then
+            echo "::error::Configure the Render deploy hook secret and public Finance HTTPS URL variable."
+            exit 1
+          fi
+          if ! curl --fail --silent --max-time 30 --request POST --output /dev/null "${RENDER_DEPLOY_HOOK_URL}&ref=$GITHUB_SHA"; then
+            echo "::error::Render did not accept the deploy request."
+            exit 1
+          fi
+          for attempt in {1..48}; do
+            if curl --fail --silent --max-time 10 --dump-header readiness.headers --output /dev/null "${FINANCE_LIVE_URL%/}/api/v1/ready" &&
+              tr -d '\r' < readiness.headers | grep -Fxi "X-Finance-Commit: $GITHUB_SHA" > /dev/null; then
+              echo "Finance is online and MongoDB is reachable for $GITHUB_SHA."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::The tested commit did not become ready on Render."
+          exit 1
