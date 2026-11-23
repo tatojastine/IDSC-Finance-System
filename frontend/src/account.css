@@ -1,0 +1,296 @@
+:root {
+  --finance-surface: #ffffff;
+  --finance-raised: #f2f8f4;
+  --finance-border: #d6e6dc;
+  --finance-ink: #162d24;
+  --finance-muted: #496658;
+  --finance-accent: #066742;
+  --finance-green-bg: #def5e8;
+  --finance-amber: #754a00;
+  --finance-amber-bg: #fff1d3;
+  --finance-red: #a12334;
+  --finance-red-bg: #fce7ea;
+  --finance-focus: #008b58;
+}
+
+:root.dark-mode {
+  color-scheme: dark;
+  --finance-canvas: #0d1817;
+  --finance-surface: #162522;
+  --finance-raised: #20352e;
+  --finance-border: #36534a;
+  --finance-ink: #eaf6ef;
+  --finance-muted: #adc8bb;
+  --finance-accent: #8aebbd;
+  --finance-green-bg: #204c3b;
+  --finance-amber: #ffd58a;
+  --finance-amber-bg: #48371f;
+  --finance-red: #ffadb9;
+  --finance-red-bg: #462832;
+  --finance-focus: #7ce5b8;
+  --background: var(--finance-canvas);
+  --text: var(--finance-ink);
+  --muted: var(--finance-muted);
+  --border: var(--finance-border);
+  --green-dark: var(--finance-accent);
+}
+
+.access-heading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 15px;
+}
+
+.access-heading .mobile-login-logo {
+  margin-right: auto;
+  margin-bottom: 0;
+}
+
+.login-card .login-sub {
+  color: var(--finance-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.login-card form > label {
+  color: var(--finance-ink);
+  font-size: 0.875rem;
+}
+
+.account-theme {
+  flex: 0 0 auto;
+}
+
+.access-limit,
+.password-hint {
+  color: var(--finance-muted);
+  font-size: 0.85rem;
+}
+
+.access-limit {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.password-hint {
+  margin-top: 6px;
+}
+
+.account-link,
+.login-switch {
+  border: 0;
+  background: transparent;
+  color: var(--finance-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 650;
+}
+
+.account-link {
+  padding: 6px 0 6px 6px;
+  font-size: 0.84rem;
+}
+
+.account-success {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: var(--finance-green-bg);
+  color: var(--finance-accent);
+}
+
+.recovery-card {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 16px;
+  border: 1px solid var(--finance-border);
+  border-radius: 12px;
+  background: var(--finance-raised);
+  color: var(--finance-ink);
+}
+
+.recovery-card label {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.recovery-card p,
+.account-settings form p { line-height: 1.5; }
+
+.recovery-card p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.recovery-card .recovery-value {
+  width: 100%;
+  padding: 10px 8px;
+  border: 1px solid var(--finance-border);
+  border-radius: 8px;
+  background: var(--finance-surface);
+  color: var(--finance-ink);
+  font-family: Consolas, monospace;
+  font-size: clamp(0.67rem, 2.9vw, 0.9rem);
+}
+
+.recovery-card .outline-btn { justify-self: start; }
+.account-settings form .outline-btn { margin-top: 12px; }
+
+.account-panel { padding: clamp(16px, 3vw, 26px); }
+
+.account-panel-header,
+.cashier-row,
+.cashier-actions,
+.cashier-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.account-panel-header,
+.cashier-row { justify-content: space-between; }
+
+.account-panel-header h2 {
+  margin-bottom: 5px;
+  font-size: 1.3rem;
+}
+
+.account-panel-header p,
+.cashier-actions p { color: var(--finance-muted); }
+
+.account-capacity,
+.cashier-status {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--finance-raised);
+  color: var(--finance-muted);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.cashier-status { text-transform: capitalize; }
+.cashier-status.active {
+  background: var(--finance-green-bg);
+  color: var(--finance-accent);
+}
+.cashier-status.pending {
+  background: var(--finance-amber-bg);
+  color: var(--finance-amber);
+}
+
+.cashier-row {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--finance-border);
+}
+
+.cashier-identity { min-width: 0; }
+.cashier-identity strong { overflow-wrap: anywhere; }
+.account-empty { margin-top: 20px; }
+.account-feedback { margin-top: 14px; }
+.account-message {
+  margin-top: 14px;
+  color: var(--finance-accent);
+  font-weight: 600;
+}
+
+.account-panel button:focus-visible,
+.login-card :is(button, input):focus-visible,
+.account-theme:focus-visible,
+.recovery-card :is(button, input):focus-visible {
+  outline: 2px solid var(--finance-focus);
+  outline-offset: 3px;
+}
+
+.dark-mode :is(.app-shell, .main, .login-page, .login-right) {
+  background: var(--finance-canvas);
+  color: var(--finance-ink);
+}
+
+.dark-mode .login-left {
+  background: radial-gradient(ellipse at 90% 15%, #26664d 0%, transparent 58%),
+    linear-gradient(155deg, #102d26, #174334 75%, #25543e);
+}
+
+.dark-mode .login-hero h1 span { color: #b5efad; }
+
+.dark-mode :is(.login-card, .sidebar, .topbar, .panel, .stat-card, .report-card, .modal, .salary-modal) {
+  background: var(--finance-surface);
+  border-color: var(--finance-border);
+  color: var(--finance-ink);
+  box-shadow: none;
+}
+
+.dark-mode .login-card form > label { color: var(--finance-ink); }
+
+.dark-mode :is(.search-box, .input-wrap, .student-search-box, .profile-mini, .top-user, .icon-btn, .outline-btn) {
+  background: var(--finance-raised);
+  border-color: var(--finance-border);
+  color: var(--finance-ink);
+}
+
+.dark-mode :is(.outline-btn, .icon-btn, .nav-item):hover {
+  background: var(--finance-green-bg);
+  color: var(--finance-accent);
+}
+
+.dark-mode .nav-item.active {
+  background: var(--finance-green-bg);
+  color: var(--finance-accent);
+}
+
+.dark-mode .nav-item.active span { color: var(--finance-accent); }
+.dark-mode :is(.eyebrow, .login-switch, .account-link, .account-message) { color: var(--finance-accent); }
+.dark-mode :is(.login-hero .eyebrow, .login-hero p) { color: #d4f0e1; }
+.dark-mode :is(.page-title p, .login-sub, .password-hint, .panel p, .report-card small, footer span) {
+  color: var(--finance-muted);
+}
+
+.dark-mode :is(input, select, textarea, .settings-card input[readonly]) {
+  background: var(--finance-raised);
+  border-color: var(--finance-border);
+  color: var(--finance-ink);
+}
+
+.dark-mode :is(.input-wrap, .search-box) input { background: transparent; }
+.dark-mode input::placeholder { color: var(--finance-muted); }
+.dark-mode :is(.report-card b, .settings-card h3, .students-table td b, .students-empty strong, .student-cell b) {
+  color: var(--finance-ink);
+}
+
+.dark-mode :is(th, .students-table th), .dark-mode tbody tr:hover {
+  background: var(--finance-raised);
+  border-color: var(--finance-border);
+  color: var(--finance-ink);
+}
+
+.dark-mode :is(td, .students-table td) { border-color: var(--finance-border); }
+.dark-mode :is(.login-error, .danger-btn) {
+  background: var(--finance-red-bg);
+  border-color: var(--finance-red);
+  color: var(--finance-red);
+}
+
+.dark-mode :is(.login-btn, .primary-btn) {
+  background: #86dbad;
+  border-color: #86dbad;
+  color: #102b20;
+  box-shadow: none;
+}
+
+.dark-mode :is(.login-btn, .primary-btn):hover { background: #b1edca; }
+.dark-mode .welcome { background: linear-gradient(115deg, #174b39, #24634a); }
+.dark-mode .welcome :is(h2, p) { color: #effcf4; }
+
+@media (max-width: 560px) {
+  .cashier-row { align-items: flex-start; flex-direction: column; }
+  .cashier-actions { width: 100%; }
+}

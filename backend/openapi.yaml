@@ -3,13 +3,23 @@ openapi: 3.0.3
 info:
   title: IDSC Finance Management System API
   version: 1.0.0
-  description: REST API for the IDSC School Finance Management System.
+  description: |
+    REST API for the IDSC School Finance Management System.
+    Current finance transactions use /api/v1/ledger. Signed-in owners and cashiers
+    can post payments; owners also manage charges, reversal decisions and partner
+    submissions. Paths outside the ledger use the historical collections.
+    The original assessment, payment and receipt paths are read-only.
 
 servers:
   - url: http://localhost:5000
     description: Local development server
 
 tags:
+  - name: Ledger
+  - name: Faculty payroll
+  - name: Partner integrations
+  - name: Account access
+    description: First-run setup, cashier approval, and password recovery
   - name: Health
     description: API health check
   - name: Students
@@ -25,9 +35,13 @@ tags:
   - name: Reports
     description: Finance reports
 
+security:
+  - cashierSession: []
+
 paths:
   /api/v1/health:
     get:
+      security: []
       tags: [Health]
       summary: Check API health
       responses:
@@ -41,6 +55,941 @@ paths:
                   status:
                     type: string
                     example: ok
+
+  /api/v1/auth/setup:
+    get:
+      tags: [Account access]
+      security: []
+      summary: Check whether owner setup is required and how many cashier slots remain
+      responses:
+        "200":
+          description: First-run status and available cashier slots
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ownerRequired, cashierSlotsAvailable]
+                properties:
+                  ownerRequired: { type: boolean }
+                  cashierSlotsAvailable: { type: integer, minimum: 0, maximum: 2 }
+    post:
+      tags: [Account access]
+      security: []
+      summary: Create the sole owner during first-run setup
+      requestBody:
+        $ref: "#/components/requestBodies/AccountCredentials"
+      responses:
+        "201": { description: Owner created and recovery code issued }
+        "409": { description: Owner already exists or email is taken }
+  /api/v1/auth/register:
+    post:
+      tags: [Account access]
+      security: []
+      summary: Request a cashier account
+      requestBody:
+        $ref: "#/components/requestBodies/AccountCredentials"
+      responses:
+        "201": { description: Pending cashier created and recovery code issued }
+        "400": { description: Invalid account details }
+        "409": { description: Owner setup required, email taken, or cashier slots full }
+        "429": { description: Too many attempts }
+  /api/v1/auth/login:
+    post:
+      tags: [Account access]
+      security: []
+      summary: Sign in and set the Finance session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+                remember: { type: boolean }
+      responses:
+        "200": { description: Owner or cashier signed in }
+        "401": { description: Email or password is incorrect }
+        "403": { description: Cashier pending or inactive }
+        "429": { description: Too many attempts }
+  /api/v1/auth/session:
+    get:
+      tags: [Account access]
+      summary: Get the current account
+      responses:
+        "200": { description: Current account ID, email, role and status }
+        "401": { description: Sign-in required }
+  /api/v1/auth/logout:
+    post:
+      tags: [Account access]
+      security: []
+      summary: End the current Finance session
+      responses:
+        "204": { description: Signed out }
+
+  /api/v1/auth/reset-password:
+    post:
+      tags: [Account access]
+      security: []
+      summary: Reset a password using an unused recovery code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, recoveryCode]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password, minLength: 12 }
+                recoveryCode: { type: string, format: password }
+      responses:
+        "200": { description: Password reset and replacement recovery code issued }
+        "400": { description: Invalid account details or recovery code }
+  /api/v1/auth/recovery-code:
+    post:
+      tags: [Account access]
+      summary: Replace the signed-in account's recovery code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string, format: password }
+      responses:
+        "200": { description: Replacement recovery code issued }
+        "401": { description: Sign-in required or current password is incorrect }
+  /api/v1/auth/cashiers:
+    get:
+      tags: [Account access]
+      summary: List cashier accounts as owner
+      responses:
+        "200": { description: Cashier accounts and approval states }
+        "403": { description: Owner role required }
+  /api/v1/auth/cashiers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      tags: [Account access]
+      summary: Approve, deactivate or reactivate a cashier as owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [approve, deactivate, activate] }
+      responses:
+        "200": { description: Cashier updated }
+        "403": { description: Owner role required }
+        "409": { description: Cashier status prevents the requested change }
+    delete:
+      tags: [Account access]
+      summary: Delete a cashier and free the slot as owner
+      responses:
+        "204": { description: Cashier deleted }
+        "403": { description: Owner role required }
+        "404": { description: Cashier not found }
+
+  /api/v1/ledger/enrollments:
+    get:
+      tags: [Ledger]
+      summary: Search student enrollments by ID, name or term
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+    post:
+      tags: [Ledger]
+      summary: Create an enrollment (owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentId, term, name, program]
+              properties:
+                studentId: { type: string }
+                term: { type: string }
+                name: { type: string }
+                program: { type: string }
+      responses:
+        "201": { description: Success }
+        "401": { description: Session or partner token required }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+  /api/v1/ledger/enrollments/{id}:
+    get:
+      tags: [Ledger]
+      summary: Read the term ledger and balances
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+  /api/v1/ledger/charges:
+    post:
+      tags: [Ledger]
+      summary: Create a charge (owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enrollmentId, label, reference, amountMinor]
+              properties:
+                enrollmentId: { type: string }
+                label: { type: string }
+                reference: { type: string }
+                amountMinor: { type: integer }
+      responses:
+        "201": { description: Success }
+        "401": { description: Session or partner token required }
+        "200": { description: Previously accepted request }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+  /api/v1/ledger/payments:
+    post:
+      tags: [Ledger]
+      summary: Post an idempotent payment to one charge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chargeId, amountMinor, method, requestId]
+              properties:
+                chargeId: { type: string }
+                amountMinor: { type: integer }
+                method: { type: string }
+                requestId: { type: string }
+                reference: { type: string }
+      responses:
+        "201": { description: Success }
+        "401": { description: Session or partner token required }
+        "200": { description: Previously accepted request }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+  /api/v1/ledger/payments/{id}/receipt:
+    get:
+      tags: [Ledger]
+      summary: Read a printable payment receipt
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Receipt details used by the print view
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LedgerReceipt"
+        "401": { description: Active Finance session required }
+        "404": { description: Payment receipt not found }
+  /api/v1/ledger/payments/{id}/reversals:
+    post:
+      tags: [Ledger]
+      summary: Request a payment reversal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        "201": { description: Success }
+        "401": { description: Session or partner token required }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+  /api/v1/ledger/payments/{id}/reversal:
+    patch:
+      tags: [Ledger]
+      summary: Approve or reject a reversal (owner)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string }
+                note: { type: string }
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+  /api/v1/ledger/reversals:
+    get:
+      tags: [Ledger]
+      summary: List pending reversals (owner)
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+  /api/v1/ledger/reports/daily:
+    get:
+      tags: [Ledger]
+      summary: Read daily totals and reversals by collector and payment method
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Daily totals, breakdown by collector and method, and individual entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyLedgerReport"
+        "400": { description: Missing or invalid business date }
+        "401": { description: Session or partner token required }
+  /api/v1/ledger/reports/daily.csv:
+    get:
+      tags: [Ledger]
+      summary: Download the daily collections breakdown and totals
+      description: Uses the same date and cashier visibility as the JSON daily report. Amounts in the CSV are in pesos.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: CSV spreadsheet download
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              description: Attachment filename for the selected date
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+        "400": { description: Missing or invalid business date }
+        "401": { description: Active Finance session required }
+  /api/v1/ledger/partner-items:
+    get:
+      tags: [Ledger]
+      summary: Read the latest Inventory and Faculty submissions (owner)
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+  /api/v1/ledger/partner-items/{id}:
+    patch:
+      tags: [Ledger]
+      summary: Review or settle a partner submission (owner)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string }
+                reference: { type: string }
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+  /api/v1/integrations/registrar/enrollments:
+    post:
+      tags: [Partner integrations]
+      summary: Send a confirmed enrollment
+      security:
+        - partnerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [externalId, studentId, term, name, program]
+              properties:
+                externalId: { type: string }
+                studentId: { type: string }
+                term: { type: string }
+                name: { type: string }
+                program: { type: string }
+      responses:
+        "201": { description: Success }
+        "401": { description: Session or partner token required }
+        "200": { description: Previously accepted request }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+        "503": { description: Integration token is not configured }
+  /api/v1/integrations/registrar/students/{studentId}/standing:
+    get:
+      tags: [Partner integrations]
+      summary: Read an enrollment's finance standing
+      security:
+        - partnerToken: []
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: term
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+        "503": { description: Integration token is not configured }
+  /api/v1/integrations/cashier/students/{studentId}/charges:
+    get:
+      tags: [Partner integrations]
+      summary: Get charge IDs and outstanding amounts
+      security:
+        - partnerToken: []
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: term
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+        "503": { description: Integration token is not configured }
+  /api/v1/integrations/cashier/payments:
+    post:
+      tags: [Partner integrations]
+      summary: Post a payment and get its receipt reference
+      security:
+        - partnerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [chargeId, amountMinor, method, requestId, operatorRef]
+              properties:
+                chargeId: { type: string }
+                amountMinor: { type: integer }
+                method: { type: string }
+                requestId: { type: string }
+                operatorRef: { type: string }
+                reference: { type: string }
+      responses:
+        "201": { description: Success }
+        "401": { description: Session or partner token required }
+        "200": { description: Previously accepted request }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+        "503": { description: Integration token is not configured }
+  /api/v1/integrations/library/fines:
+    post:
+      tags: [Partner integrations]
+      summary: Submit an approved library fine
+      security:
+        - partnerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentId, term, reference, label, amountMinor]
+              properties:
+                studentId: { type: string }
+                term: { type: string }
+                reference: { type: string }
+                label: { type: string }
+                amountMinor: { type: integer }
+      responses:
+        "201": { description: Success }
+        "401": { description: Session or partner token required }
+        "200": { description: Previously accepted request }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+        "503": { description: Integration token is not configured }
+  /api/v1/integrations/library/fines/{reference}:
+    get:
+      tags: [Partner integrations]
+      summary: Read the settlement of one library fine
+      security:
+        - partnerToken: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+        "503": { description: Integration token is not configured }
+  /api/v1/integrations/inventory/payables:
+    post:
+      tags: [Partner integrations]
+      summary: Submit an approved order and goods received for review
+      security:
+        - partnerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [externalId, approvedOrderRef, receivingRef, vendorRef, items]
+              properties:
+                externalId: { type: string }
+                approvedOrderRef: { type: string }
+                receivingRef: { type: string }
+                vendorRef: { type: string }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [itemRef, quantity, unitCostMinor]
+                    properties:
+                      itemRef: { type: string }
+                      quantity: { type: integer }
+                      unitCostMinor: { type: integer }
+      responses:
+        "201": { description: Success }
+        "401": { description: Session or partner token required }
+        "200": { description: Previously accepted request }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+        "503": { description: Integration token is not configured }
+  /api/v1/integrations/inventory/payables/{reference}:
+    get:
+      tags: [Partner integrations]
+      summary: Read the status of an Inventory payable
+      security:
+        - partnerToken: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+        "503": { description: Integration token is not configured }
+  /api/v1/integrations/faculty/workloads:
+    post:
+      tags: [Partner integrations]
+      summary: Submit approved teaching workload
+      security:
+        - partnerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [externalId, employeeRef, period, approvedHoursHundredths]
+              properties:
+                externalId: { type: string }
+                employeeRef: { type: string }
+                period: { type: string }
+                approvedHoursHundredths: { type: integer }
+      responses:
+        "201": { description: Success }
+        "401": { description: Session or partner token required }
+        "200": { description: Previously accepted request }
+        "400": { description: Invalid request }
+        "409": { description: Record or state conflict }
+        "503": { description: Integration token is not configured }
+  /api/v1/integrations/faculty/workloads/{reference}:
+    get:
+      tags: [Partner integrations]
+      summary: Read the review status of an approved workload
+      security:
+        - partnerToken: []
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "401": { description: Session or partner token required }
+        "503": { description: Integration token is not configured }
+
+  /api/v1/payroll/runs:
+    get:
+      tags: [Faculty payroll]
+      summary: List payroll runs (owner)
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: period
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "403": { description: Owner access required }
+    post:
+      tags: [Faculty payroll]
+      summary: Create a draft for one payroll period (owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period]
+              properties:
+                period: { type: string }
+      responses:
+        "201": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "403": { description: Owner access required }
+        "409": { description: Record or state conflict }
+  /api/v1/payroll/runs/{id}:
+    get:
+      tags: [Faculty payroll]
+      summary: Read payroll lines, totals and status (owner)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "403": { description: Owner access required }
+        "404": { description: Run or line unavailable }
+  /api/v1/payroll/runs/{id}/workloads:
+    get:
+      tags: [Faculty payroll]
+      summary: List reviewed workloads and available Personnel rates (owner)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "403": { description: Owner access required }
+        "404": { description: Run or line unavailable }
+    post:
+      tags: [Faculty payroll]
+      summary: Record workload already approved outside the Faculty API (owner)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [employeeRef, reference, approvalRef, approvedHoursHundredths]
+              properties:
+                employeeRef: { type: string }
+                reference: { type: string }
+                approvalRef: { type: string }
+                approvedHoursHundredths: { type: integer }
+      responses:
+        "201": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "403": { description: Owner access required }
+        "404": { description: Run or line unavailable }
+        "409": { description: Record or state conflict }
+  /api/v1/payroll/runs/{id}/lines:
+    put:
+      tags: [Faculty payroll]
+      summary: Save a draft faculty pay calculation (owner)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workloadId, revision]
+              properties:
+                workloadId: { type: string }
+                revision: { type: integer }
+                lineId: { type: string }
+                displayName: { type: string }
+                hourlyRateMinor: { type: integer }
+                rateApprovalRef: { type: string }
+                additionsMinor: { type: integer }
+                additionNote: { type: string }
+                deductionsMinor: { type: integer }
+                deductionNote: { type: string }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "403": { description: Owner access required }
+        "404": { description: Run or line unavailable }
+        "409": { description: Record or state conflict }
+  /api/v1/payroll/runs/{id}/lines/{lineId}:
+    delete:
+      tags: [Faculty payroll]
+      summary: Remove a draft payroll line (owner)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: lineId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: revision
+          in: query
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "403": { description: Owner access required }
+        "404": { description: Run or line unavailable }
+        "409": { description: Record or state conflict }
+  /api/v1/payroll/runs/{id}/finalize:
+    post:
+      tags: [Faculty payroll]
+      summary: Lock a payroll run for disbursement and reporting (owner)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: { type: integer }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "403": { description: Owner access required }
+        "404": { description: Run or line unavailable }
+        "409": { description: Record or state conflict }
+  /api/v1/payroll/runs/{id}/settlement:
+    post:
+      tags: [Faculty payroll]
+      summary: Record a completed external settlement (owner)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference, amountMinor]
+              properties:
+                reference: { type: string }
+                amountMinor: { type: integer }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "403": { description: Owner access required }
+        "404": { description: Run or line unavailable }
+        "409": { description: Record or state conflict }
+  /api/v1/integrations/personnel/payroll-rates:
+    post:
+      tags: [Faculty payroll]
+      summary: Submit an approved hourly rate and employee reference
+      security:
+        - partnerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [externalId, employeeRef, displayName, period, hourlyRateMinor, approvalRef]
+              properties:
+                externalId: { type: string }
+                employeeRef: { type: string }
+                displayName: { type: string }
+                period: { type: string }
+                hourlyRateMinor: { type: integer }
+                approvalRef: { type: string }
+      responses:
+        "201": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "503": { description: Integration is not configured }
+        "409": { description: Record or state conflict }
+        "200": { description: Identical rate submission already recorded }
+  /api/v1/integrations/disbursement/payroll-runs:
+    get:
+      tags: [Faculty payroll]
+      summary: List released payroll run summaries for Disbursement
+      security:
+        - partnerToken: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: period
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "503": { description: Integration is not configured }
+  /api/v1/integrations/disbursement/payroll-runs/{id}:
+    get:
+      tags: [Faculty payroll]
+      summary: Get a released batch with employee references and net amounts
+      security:
+        - partnerToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "503": { description: Integration is not configured }
+        "404": { description: Run or line unavailable }
+  /api/v1/integrations/disbursement/payroll-runs/{id}/settlement:
+    post:
+      tags: [Faculty payroll]
+      summary: Acknowledge a completed external disbursement
+      security:
+        - partnerToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reference, amountMinor]
+              properties:
+                reference: { type: string }
+                amountMinor: { type: integer }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "503": { description: Integration is not configured }
+        "404": { description: Run or line unavailable }
+        "409": { description: Record or state conflict }
+  /api/v1/integrations/accounting/payroll-runs:
+    get:
+      tags: [Faculty payroll]
+      summary: List aggregate totals for released runs
+      security:
+        - partnerToken: []
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: period
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "503": { description: Integration is not configured }
+  /api/v1/integrations/accounting/payroll-runs/{id}:
+    get:
+      tags: [Faculty payroll]
+      summary: Get released payroll totals and settlement status
+      security:
+        - partnerToken: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Success }
+        "400": { description: Invalid input }
+        "401": { description: Owner session or the specific partner token is required }
+        "503": { description: Integration is not configured }
+        "404": { description: Run or line unavailable }
 
   /api/v1/students:
     get:
@@ -58,41 +1007,13 @@ paths:
         "500":
           $ref: "#/components/responses/ServerError"
 
-    post:
-      tags: [Students]
-      summary: Create a student
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/StudentInput"
-            example:
-              studentId: "2026-001"
-              studentName: "Juan Dela Cruz"
-              program: "BSIT"
-              academicYear: "2026-2027"
-              semester: "1st Semester"
-              accountStatus: "Active"
-      responses:
-        "201":
-          description: Student created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Student"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "500":
-          $ref: "#/components/responses/ServerError"
-
-  /api/v1/students/{id}:
+  /api/v1/students/{studentId}:
     parameters:
-      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/StudentId"
 
     get:
       tags: [Students]
-      summary: Get one student
+      summary: Get one historical student by school student ID
       responses:
         "200":
           description: Student found
@@ -100,27 +1021,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Student"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-    put:
-      tags: [Students]
-      summary: Update a student
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/StudentInput"
-      responses:
-        "200":
-          description: Student updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Student"
-        "400":
-          $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -138,39 +1038,6 @@ paths:
                 items:
                   $ref: "#/components/schemas/Assessment"
 
-    post:
-      tags: [Assessments]
-      summary: Create an assessment
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AssessmentInput"
-            example:
-              studentId: "2026-001"
-              academicYear: "2026-2027"
-              semester: "1st Semester"
-              tuitionFee: 15000
-              miscellaneousFee: 2000
-              laboratoryFee: 1000
-              registrationFee: 500
-              libraryFee: 500
-              otherFees: 500
-              discounts: 0
-              scholarshipFinancialAssistance: 0
-              dueDate: "2026-11-30"
-              assessmentStatus: "Unpaid"
-      responses:
-        "201":
-          description: Assessment created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Assessment"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-
   /api/v1/assessments/{id}:
     parameters:
       - $ref: "#/components/parameters/Id"
@@ -185,27 +1052,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Assessment"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-    put:
-      tags: [Assessments]
-      summary: Update an assessment
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AssessmentInput"
-      responses:
-        "200":
-          description: Assessment updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Assessment"
-        "400":
-          $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -241,37 +1087,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Payment"
-
-    post:
-      tags: [Payments]
-      summary: Record a payment
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PaymentInput"
-            example:
-              paymentId: "PAY-2026-001"
-              studentId: "2026-001"
-              assessmentId: "REPLACE_WITH_ASSESSMENT_OBJECT_ID"
-              amountPaid: 5000
-              paymentDate: "2026-10-15"
-              paymentMethod: "Cash"
-              referenceNumber: "REF-001"
-              receiptNumber: "REC-2026-001"
-              processedBy: "Finance Staff"
-              remarks: "First payment"
-              paymentStatus: "Partially Paid"
-      responses:
-        "201":
-          description: Payment recorded successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Payment"
-        "400":
-          $ref: "#/components/responses/BadRequest"
 
   /api/v1/payments/student/{studentId}:
     parameters:
@@ -309,27 +1124,6 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-    put:
-      tags: [Payments]
-      summary: Update a payment
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/PaymentInput"
-      responses:
-        "200":
-          description: Payment updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Payment"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
   /api/v1/receipts:
     get:
       tags: [Receipts]
@@ -343,37 +1137,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Receipt"
-
-    post:
-      tags: [Receipts]
-      summary: Create a receipt
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ReceiptInput"
-            example:
-              receiptNumber: "REC-2026-001"
-              paymentId: "PAY-2026-001"
-              studentId: "2026-001"
-              studentName: "Juan Dela Cruz"
-              paymentDate: "2026-10-15"
-              amountPaid: 5000
-              paymentMethod: "Cash"
-              referenceNumber: "REF-001"
-              previousBalance: 20000
-              remainingBalance: 15000
-              processedBy: "Finance Staff"
-      responses:
-        "201":
-          description: Receipt created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Receipt"
-        "400":
-          $ref: "#/components/responses/BadRequest"
 
   /api/v1/receipts/student/{studentId}:
     parameters:
@@ -408,27 +1171,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Receipt"
-        "404":
-          $ref: "#/components/responses/NotFound"
-
-    put:
-      tags: [Receipts]
-      summary: Update a receipt
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ReceiptInput"
-      responses:
-        "200":
-          description: Receipt updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Receipt"
-        "400":
-          $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -508,6 +1250,26 @@ paths:
                       example: 14500
 
 components:
+  requestBodies:
+    AccountCredentials:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email, password]
+            properties:
+              email: { type: string, format: email }
+              password: { type: string, format: password, minLength: 12 }
+  securitySchemes:
+    partnerToken:
+      type: http
+      scheme: bearer
+      description: Dedicated server-side token for the partner named in the path.
+    cashierSession:
+      type: apiKey
+      in: cookie
+      name: idsc_finance_session
   parameters:
     Id:
       name: id
@@ -560,6 +1322,74 @@ components:
             $ref: "#/components/schemas/Problem"
 
   schemas:
+    DailyLedgerTotals:
+      type: object
+      required: [collectedMinor, reversedMinor, netMinor]
+      properties:
+        collectedMinor: { type: integer, description: Posted collections in centavos }
+        reversedMinor: { type: integer, description: Approved reversals in centavos }
+        netMinor: { type: integer, description: Collected minus reversed in centavos }
+    DailyLedgerReport:
+      type: object
+      required: [date, timezone, totals, groups, rows]
+      properties:
+        date: { type: string, format: date }
+        timezone: { type: string, example: Asia/Manila }
+        totals:
+          $ref: "#/components/schemas/DailyLedgerTotals"
+        groups:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/DailyLedgerTotals"
+              - type: object
+                required: [postedBy, method]
+                properties:
+                  postedBy: { type: string }
+                  method: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            required: [paymentId, receiptNumber, postedBy, method, amountMinor, type, at]
+            properties:
+              paymentId: { type: string, format: uuid }
+              receiptNumber: { type: string }
+              postedBy: { type: string }
+              decidedBy: { type: string, description: Approval actor for a reversal }
+              method: { type: string }
+              amountMinor: { type: integer }
+              type: { type: string, enum: [collection, reversal] }
+              at: { type: string, format: date-time }
+    LedgerReceipt:
+      type: object
+      required: [_id, receiptNumber, status, studentId, studentName, term, charge, amountMinor, method, postedAt, postedBy, balanceAfterMinor, reversals]
+      properties:
+        _id: { type: string, format: uuid }
+        receiptNumber: { type: string }
+        status: { type: string, enum: [posted, reversed] }
+        studentId: { type: string }
+        studentName: { type: string }
+        term: { type: string }
+        charge: { type: string }
+        amountMinor: { type: integer }
+        balanceAfterMinor: { type: integer, description: Charge balance immediately after posting }
+        method: { type: string, enum: [Cash, Bank Transfer, Online Payment, Other] }
+        reference: { type: string }
+        postedAt: { type: string, format: date-time }
+        postedBy: { type: string }
+        reversals:
+          type: array
+          items:
+            type: object
+            properties:
+              reason: { type: string }
+              status: { type: string, enum: [pending, approved, rejected] }
+              requestedAt: { type: string, format: date-time }
+              requestedBy: { type: string }
+              decidedAt: { type: string, format: date-time }
+              decidedBy: { type: string }
+              decisionNote: { type: string }
     Problem:
       type: object
       properties:

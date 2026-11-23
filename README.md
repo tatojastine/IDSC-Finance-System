@@ -19,6 +19,26 @@ The class project consists of eight modules:
 
 This repository contains the *Finance Module*.
 
+## Owner and cashier accounts
+
+Run `backend/server.js` with MongoDB at `127.0.0.1:27017`, then run `npm run dev` in `frontend`. Vite forwards `/api/v1` to the local backend.
+
+1. Open the local Finance app. **Create the owner account** appears until the owner has registered. Complete this step on the local machine before giving anybody else access to a fresh installation.
+2. Sign in as the owner, or use **Register as a cashier** to request one of the two cashier slots. The owner approves requests in **Cashier Accounts**. Pending and inactive accounts occupy a slot and cannot sign in.
+3. The owner can deactivate, reactivate, or delete cashiers. Deletion frees a cashier slot and leaves finance records intact.
+4. Each registration shows a one-time recovery code. Save it privately for **Forgot password?**. Resetting the password revokes existing sessions and issues a replacement code. Signed-in users can replace a lost code in **Settings** by entering their current password. The local app does not send recovery email.
+5. Use the moon or sun button to switch themes. The browser remembers the choice.
+
+## Finance workflow and partner APIs
+
+The owner can add an enrollment and charges under **Students**. Approved cashiers can open an account, record a payment, print a receipt, and send a reversal request to the owner. **Reports** shows daily reconciliations, and **Partner Records** shows Inventory and Faculty submissions.
+
+See [Finance workflows and integration contracts](docs/finance-workflows.md) for the demo, permissions, request examples, and the distinction between the current ledger and the original read-only API.
+
+The [System and Developer Handbook](docs/finance-system-handbook.md) covers project history, each active feature, the API route map, and the frontend and backend responsibilities.
+
+The owner’s [Faculty Payroll guide](docs/faculty-payroll.md) explains payroll runs, payslips, and the Faculty, Personnel, Disbursement, and Accounting contracts.
+
 ---
 
 # Technology Stack

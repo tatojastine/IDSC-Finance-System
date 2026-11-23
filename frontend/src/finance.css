@@ -1,0 +1,232 @@
+.finance-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.finance-panel,
+.finance-form,
+.finance-receipt {
+  padding: clamp(16px, 3vw, 25px);
+}
+
+.finance-panel h2,
+.finance-receipt h2 {
+  font-size: 1.3rem;
+  margin-bottom: 5px;
+}
+
+.finance-panel p,
+.finance-charge p,
+.finance-form p {
+  color: var(--finance-muted);
+  line-height: 1.5;
+}
+
+.finance-row,
+.finance-actions,
+.finance-list li,
+.finance-history li {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+}
+
+.finance-row,
+.finance-list li,
+.finance-history li {
+  justify-content: space-between;
+}
+
+.finance-panel > p {
+  margin-top: 12px;
+}
+
+.finance-search {
+  margin: 16px 0 12px;
+}
+
+.finance-search input {
+  flex: 1;
+  min-width: 150px;
+  max-width: 410px;
+}
+
+.finance-fields {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 0;
+  border: 0;
+}
+
+.finance-fields label,
+.finance-actions label {
+  display: grid;
+  gap: 5px;
+  color: var(--finance-ink);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.finance-fields :is(input, select),
+.finance-actions input {
+  padding: 9px 11px;
+  background: var(--finance-surface);
+  border: 1px solid var(--finance-border);
+  border-radius: 8px;
+  color: var(--finance-ink);
+}
+
+.finance-fields :is(input, select) {
+  width: 100%;
+  max-width: 540px;
+}
+
+.finance-stack :is(button, input, select, summary):focus-visible {
+  outline: 2px solid var(--finance-focus);
+  outline-offset: 2px;
+}
+
+.finance-list,
+.finance-history {
+  list-style: none;
+}
+
+.finance-list li,
+.finance-history li {
+  padding: 12px 0;
+  border-top: 1px solid var(--finance-border);
+}
+
+.finance-list li:first-child {
+  margin-top: 12px;
+}
+
+.finance-list li > div,
+.finance-history li > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.finance-charge {
+  padding: 14px;
+  margin-top: 14px;
+  border: 1px solid var(--finance-border);
+  border-radius: 12px;
+  background: var(--finance-raised);
+}
+
+.finance-charge h3,
+.finance-form h3 {
+  font-size: 1.05rem;
+}
+
+.finance-history {
+  margin-top: 12px;
+}
+
+.finance-reversal-history {
+  margin-top: 7px;
+  color: var(--finance-muted);
+}
+
+.finance-reversal-history summary {
+  cursor: pointer;
+}
+
+.finance-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.finance-totals div {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--finance-border);
+  border-radius: 10px;
+  background: var(--finance-raised);
+}
+
+.finance-totals span {
+  color: var(--finance-muted);
+}
+
+.finance-totals strong {
+  color: var(--finance-accent);
+  font-size: 1.25rem;
+}
+
+.finance-table-wrap {
+  overflow: auto;
+}
+
+.finance-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.finance-table :is(th, td) {
+  padding: 11px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--finance-border);
+}
+
+.receipt-body {
+  max-width: 640px;
+}
+
+.receipt-body dl {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 2fr;
+  gap: 8px 15px;
+  margin: 16px 0;
+}
+
+.receipt-body dt {
+  color: var(--finance-muted);
+}
+
+.receipt-body dd,
+.finance-reference {
+  overflow-wrap: anywhere;
+}
+
+.receipt-body .cashier-status {
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.receipt-actions {
+  margin-top: 14px;
+}
+
+.finance-stack .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+@media print {
+  body:has(.finance-receipt) :is(.sidebar, .topbar, footer, .receipt-actions, .finance-stack > :not(.finance-receipt)) {
+    display: none !important;
+  }
+
+  body:has(.finance-receipt) :is(.app-shell, .main, .content, .finance-receipt, .receipt-body, .receipt-body *) {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+
+  body:has(.finance-receipt) :is(.app-shell, .main, .content) {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
