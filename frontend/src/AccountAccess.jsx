@@ -64,6 +64,7 @@ export default function AccountAccess({ Logo, setup, loading, startupError, onRe
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [setupKey, setSetupKey] = useState("");
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -76,6 +77,7 @@ export default function AccountAccess({ Logo, setup, loading, startupError, onRe
     setView(next);
     setPassword("");
     setCode("");
+    setSetupKey("");
     setError("");
     setResult(null);
   }
@@ -90,13 +92,14 @@ export default function AccountAccess({ Logo, setup, loading, startupError, onRe
         onLogin(await signIn({ ...details, remember }));
       } else {
         const response = await (
-          form === "setup" ? createOwner(details)
+          form === "setup" ? createOwner({ ...details, ...(setup.setupKeyRequired && { setupKey }) })
             : form === "register" ? registerCashier(details)
               : resetPassword({ ...details, recoveryCode: code })
         );
         setResult({ form, code: response.recoveryCode });
         setPassword("");
         setCode("");
+        setSetupKey("");
       }
     } catch (requestError) {
       setError(requestError.status ? requestError.message : "Could not reach Finance. Try again.");
@@ -181,6 +184,16 @@ export default function AccountAccess({ Logo, setup, loading, startupError, onRe
                   </div>
                   {form !== "login" && <small className="password-hint">At least 12 characters.</small>}
                 </label>
+                {form === "setup" && setup.setupKeyRequired && (
+                  <label>
+                    Owner setup key
+                    <div className="input-wrap">
+                      <KeyRound size={17} />
+                      <input type="password" autoComplete="off" required
+                        value={setupKey} onChange={(event) => setSetupKey(event.target.value)} />
+                    </div>
+                  </label>
+                )}
                 {form === "login" && (
                   <div className="login-options">
                     <label className="check-label">

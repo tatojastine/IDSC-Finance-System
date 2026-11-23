@@ -1,12 +1,13 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
-const { createHash, randomBytes } = require("node:crypto");
+const { createHash, randomBytes, timingSafeEqual } = require("node:crypto");
 const mongoose = require("mongoose");
 const CashierAccount = require("../models/CashierAccount");
+const config = require("../config");
 
 const router = express.Router();
 const cookieName = "idsc_finance_session";
-const cookieOptions = { httpOnly: true, sameSite: "lax", path: "/" };
+const cookieOptions = { httpOnly: true, sameSite: "lax", path: "/", secure: config.hosted };
 const sessionDuration = 8 * 60 * 60 * 1000;
 const rememberDuration = 7 * 24 * 60 * 60 * 1000;
 const ownerSlot = 0;
@@ -110,13 +111,29 @@ router.get("/setup", async (req, res) => {
     ownerExists(),
     CashierAccount.countDocuments({ cashierSlot: { $in: cashierSlots } })
   ]);
-  res.json({ ownerRequired: !owner, cashierSlotsAvailable: cashierSlots.length - cashierCount });
+  res.json({
+    ownerRequired: !owner,
+    cashierSlotsAvailable: cashierSlots.length - cashierCount,
+    ...(!owner && config.hosted && { setupKeyRequired: true })
+  });
 });
 
 router.post("/setup", limitAttempts, async (req, res) => {
   const input = credentials(req.body);
   if (!input) return res.status(400).json({ message: inputMessage });
   if (await ownerExists()) return res.status(409).json({ message: "The owner account already exists. Sign in to continue." });
+
+  if (config.hosted) {
+    const expected = config.ownerSetupKey;
+    if (!expected || expected.length < 32) {
+      return res.status(503).json({ message: "The host must configure the owner setup key before setup can begin." });
+    }
+    const supplied = req.body?.setupKey;
+    if (typeof supplied !== "string" || supplied.length !== expected.length ||
+        !timingSafeEqual(Buffer.from(digest(supplied), "hex"), Buffer.from(digest(expected), "hex"))) {
+      return res.status(403).json({ message: "Enter the valid owner setup key." });
+    }
+  }
 
   const recoveryCode = newRecoveryCode();
   try {

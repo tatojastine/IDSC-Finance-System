@@ -1,14 +1,14 @@
 
 const mongoose = require("mongoose");
+const { mongoUri } = require("./config");
 
 const connectDB = async () => {
   try {
-    await mongoose.connect("mongodb://127.0.0.1:27017/idsc_finance");
+    await mongoose.connect(mongoUri);
 
     console.log("MongoDB connected successfully");
-  } catch (error) {
-    console.error("MongoDB connection failed:", error.message);
-    process.exit(1);
+  } catch {
+    throw new Error("MongoDB connection failed. Check the database connection settings and network access.");
   }
 };
 

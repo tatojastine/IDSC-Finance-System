@@ -39,6 +39,8 @@ The [System and Developer Handbook](docs/finance-system-handbook.md) covers proj
 
 The owner’s [Faculty Payroll guide](docs/faculty-payroll.md) explains payroll runs, payslips, and the Faculty, Personnel, Disbursement, and Accounting contracts.
 
+See the [Render staging guide](docs/render-staging.md) to host the dashboard and API together with a separate MongoDB Atlas database.
+
 ---
 
 # Technology Stack

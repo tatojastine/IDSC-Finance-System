@@ -5,7 +5,8 @@ const swaggerUi = require("swagger-ui-express");
 const yaml = require("js-yaml");
 const fs = require("fs");
 const path = require("node:path");
-require("dotenv").config({ path: path.join(__dirname, ".env"), quiet: true });
+const mongoose = require("mongoose");
+const config = require("./config");
 
 const connectDB = require("./db");
 
@@ -25,9 +26,9 @@ const integrationRoutes = require("./routes/integrations");
 const { router: authRoutes, requireAccount, CashierSession } = require("./routes/auth");
 
 const app = express();
-const PORT = 5000;
+app.disable("x-powered-by");
 
-const frontendOrigins = new Set([
+const frontendOrigins = new Set(config.hosted ? [config.publicOrigin] : [
   "http://localhost:5173", "http://localhost:5174",
   "http://127.0.0.1:5173", "http://127.0.0.1:5174"
 ]);
@@ -37,8 +38,9 @@ app.use(cors({
 }));
 app.use("/api/v1", (req, res, next) => {
   const origin = req.get("Origin");
-  if (req.method !== "GET" && origin &&
-      origin !== `http://${req.get("Host")}` && !frontendOrigins.has(origin)) {
+  const sameLocalOrigin = !config.hosted && origin === `http://${req.get("Host")}`;
+  if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && origin &&
+      !sameLocalOrigin && !frontendOrigins.has(origin)) {
     return res.status(403).json({ message: "This request must come from the Finance app." });
   }
   next();
@@ -50,6 +52,13 @@ const swaggerDocument = yaml.load(
   fs.readFileSync(path.join(__dirname, "openapi.yaml"), "utf8")
 );
 
+if (config.hosted) {
+  swaggerDocument.servers = [{ url: config.publicOrigin, description: "This Finance service" }];
+  app.use("/docs", requireAccount, (req, res, next) => {
+    if (req.account.role !== "owner") return res.status(403).json({ message: "Only the owner can open the hosted API reference." });
+    next();
+  });
+}
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Health check
@@ -57,6 +66,17 @@ app.get("/api/v1/health", (req, res) => {
   res.json({
     status: "ok"
   });
+});
+
+app.get("/api/v1/ready", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ status: "unavailable" });
+    await mongoose.connection.db.command({ ping: 1 }, { timeoutMS: 2000 });
+    return res.json({ status: "ready" });
+  } catch {
+    return res.status(503).json({ status: "unavailable" });
+  }
 });
 
 app.use("/api/v1/auth", authRoutes);
@@ -89,6 +109,10 @@ app.use("/api/v1/finance", financeRoutes);
 // Reports API
 app.use("/api/v1/reports", reportsRoutes);
 
+if (config.hosted) {
+  app.use(express.static(config.frontendDir));
+}
+
 // 404 handler for unknown routes
 app.use((req, res) => {
   res.status(404).type("application/problem+json").json({
@@ -109,26 +133,25 @@ app.use((error, req, res, next) => {
   return res.status(500).json({ message: "The Finance server could not complete the request." });
 });
 
-// Connect to MongoDB and enforce the account limits before accepting requests.
-if (require.main === module) connectDB()
-  .then(async () => {
-    await Promise.all([CashierAccount, CashierSession, Enrollment, Charge, PartnerItem, PayrollRate, PayrollRun]
-      .map((model) => model.init()));
-    app.listen(PORT, "127.0.0.1", () => {
-      console.log(`Midterm API running on http://localhost:${PORT}`);
-      console.log(`Swagger Docs: http://localhost:${PORT}/docs`);
-      console.log(`Health API: http://localhost:${PORT}/api/v1/health`);
-      console.log(`Student API: http://localhost:${PORT}/api/v1/students`);
-      console.log(`Assessment API: http://localhost:${PORT}/api/v1/assessments`);
-      console.log(`Payment API: http://localhost:${PORT}/api/v1/payments`);
-      console.log(`Receipt API: http://localhost:${PORT}/api/v1/receipts`);
-      console.log(`Finance API: http://localhost:${PORT}/api/v1/finance`);
-      console.log(`Reports API: http://localhost:${PORT}/api/v1/reports`);
-    });
-  })
-  .catch((error) => {
+async function start() {
+  if (config.hosted && !fs.existsSync(path.join(config.frontendDir, "index.html"))) {
+    throw new Error("Build the frontend before starting Finance in production mode.");
+  }
+  await connectDB();
+  await Promise.all([CashierAccount, CashierSession, Enrollment, Charge, PartnerItem, PayrollRate, PayrollRun]
+    .map((model) => model.init()));
+  app.listen(config.port, config.bindHost, () => {
+    const base = config.publicOrigin || `http://localhost:${config.port}`;
+    console.log(`Finance running at ${base}`);
+    console.log(`Database readiness: ${base}/api/v1/ready`);
+  });
+}
+
+if (require.main === module) {
+  start().catch((error) => {
     console.error("Server startup failed:", error.message);
     process.exit(1);
   });
+}
 
 module.exports = app;
