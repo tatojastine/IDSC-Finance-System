@@ -1,6 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
-const { createHash, randomBytes, timingSafeEqual } = require("node:crypto");
+const jwt = require("jsonwebtoken");
+const { createHash, randomBytes, randomUUID, timingSafeEqual } = require("node:crypto");
 const mongoose = require("mongoose");
 const CashierAccount = require("../models/CashierAccount");
 const config = require("../config");
@@ -10,6 +11,7 @@ const cookieName = "idsc_finance_session";
 const cookieOptions = { httpOnly: true, sameSite: "lax", path: "/", secure: config.hosted };
 const sessionDuration = 8 * 60 * 60 * 1000;
 const rememberDuration = 7 * 24 * 60 * 60 * 1000;
+const tokenIdentity = { issuer: "idsc-finance", audience: "idsc-finance-api" };
 const ownerSlot = 0;
 const cashierSlots = [1, 2];
 const dummyHash = bcrypt.hashSync(randomBytes(32).toString("hex"), 12);
@@ -33,11 +35,23 @@ function credentials(body) {
   return { email, password };
 }
 
-function sessionKey(req) {
+function sessionToken(req) {
+  const authorization = req.get("Authorization");
+  if (authorization) return /^Bearer ([^\s]+)$/i.exec(authorization)?.[1];
   const cookies = (req.headers.cookie ?? "").split(";");
   const cookie = cookies.find((entry) => entry.trimStart().startsWith(cookieName + "="));
-  const token = cookie?.trim().slice(cookieName.length + 1);
-  return /^[a-f0-9]{64}$/.test(token) ? digest(token) : null;
+  return cookie?.trim().slice(cookieName.length + 1);
+}
+
+function verifiedSession(req) {
+  const token = sessionToken(req);
+  if (!token || token.length > 2048) return null;
+  try {
+    const claims = jwt.verify(token, config.jwtSecret, { ...tokenIdentity, algorithms: ["HS256"] });
+    return { key: digest(token), subject: claims.sub, role: claims.role };
+  } catch {
+    return null;
+  }
 }
 
 function publicAccount(account) {
@@ -50,18 +64,20 @@ function publicAccount(account) {
 }
 
 async function requireAccount(req, res, next) {
-  const key = sessionKey(req);
-  const session = key && await CashierSession.findOne({
-    _id: key, expiresAt: { $gt: new Date() }
+  const verified = verifiedSession(req);
+  const session = verified && await CashierSession.findOne({
+    _id: verified.key, expiresAt: { $gt: new Date() }
   }).lean();
   const account = session && await CashierAccount.findById(session.userId).lean();
-  if (!account || (account.status ?? "active") !== "active" ||
+  if (!account || String(account._id) !== verified.subject || (account.status ?? "active") !== "active" ||
       (account.sessionVersion ?? 0) !== (session.version ?? 0)) {
     return res.status(401).json({ message: "Sign in to continue." });
   }
+  const current = publicAccount(account);
+  if (current.role !== verified.role) return res.status(401).json({ message: "Sign in to continue." });
 
   res.set("Cache-Control", "no-store");
-  req.account = publicAccount(account);
+  req.account = current;
   next();
 }
 
@@ -175,6 +191,10 @@ router.post("/register", limitAttempts, async (req, res) => {
 });
 
 router.post("/login", limitAttempts, async (req, res) => {
+  const transport = req.body?.tokenTransport ?? "cookie";
+  if (!["cookie", "bearer"].includes(transport)) {
+    return res.status(400).json({ message: "Use cookie or bearer token transport." });
+  }
   const input = credentials(req.body);
   const account = input && await CashierAccount.findOne({ email: input.email }).select("+password").lean();
   const matches = await bcrypt.compare(input?.password ?? "", account?.password ?? dummyHash);
@@ -186,18 +206,26 @@ router.post("/login", limitAttempts, async (req, res) => {
     return res.status(403).json({ message: "Your cashier account is inactive. Contact the owner." });
   }
 
-  const previousKey = sessionKey(req);
-  if (previousKey) await CashierSession.deleteOne({ _id: previousKey });
-  const token = randomBytes(32).toString("hex");
+  const previous = verifiedSession(req);
+  const current = publicAccount(account);
   const remember = req.body.remember === true;
   const duration = remember ? rememberDuration : sessionDuration;
+  const expiresIn = duration / 1000;
+  const token = jwt.sign({ role: current.role }, config.jwtSecret, {
+    ...tokenIdentity, algorithm: "HS256", subject: current.id, jwtid: randomUUID(), expiresIn
+  });
   await CashierSession.create({
     _id: digest(token), userId: account._id, version: account.sessionVersion ?? 0,
     expiresAt: new Date(Date.now() + duration)
   });
+  if (previous) await CashierSession.deleteOne({ _id: previous.key });
   attempts.delete(req.ip + req.path);
+  if (transport === "bearer") {
+    if (previous) res.clearCookie(cookieName, cookieOptions);
+    return res.json({ ...current, accessToken: token, tokenType: "Bearer", expiresIn });
+  }
   res.cookie(cookieName, token, remember ? { ...cookieOptions, maxAge: duration } : cookieOptions);
-  return res.json(publicAccount(account));
+  return res.json(current);
 });
 
 router.get("/session", requireAccount, (req, res) => res.json(req.account));
@@ -272,8 +300,8 @@ router.delete("/cashiers/:id", async (req, res) => {
 });
 
 router.post("/logout", async (req, res) => {
-  const key = sessionKey(req);
-  if (key) await CashierSession.deleteOne({ _id: key });
+  const session = verifiedSession(req);
+  if (session) await CashierSession.deleteOne({ _id: session.key });
   res.clearCookie(cookieName, cookieOptions).status(204).end();
 });
 

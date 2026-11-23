@@ -5,6 +5,8 @@ const { once } = require("node:events");
 const path = require("node:path");
 const test = require("node:test");
 const mongoose = require("mongoose");
+const jwt = require("jsonwebtoken");
+const yaml = require("js-yaml");
 
 const mongoUri = process.env.FINANCE_TEST_MONGO;
 const hostedOrigin = "https://finance-staging.example.test";
@@ -14,6 +16,8 @@ test("hosted Finance protects setup and serves the app and API from one origin",
   process.env.APP_ORIGIN = hostedOrigin;
   process.env.MONGODB_URI = mongoUri;
   process.env.OWNER_SETUP_KEY = "";
+  process.env.JWT_SECRET = randomBytes(32).toString("hex");
+  process.env.RENDER_GIT_COMMIT = "a".repeat(40);
   const app = require("../server");
   const config = require("../config");
   const CashierAccount = require("../models/CashierAccount");
@@ -29,11 +33,14 @@ test("hosted Finance protects setup and serves the app and API from one origin",
     });
 
     assert.equal((await get("/api/v1/ready")).status, 503);
+    assert.deepEqual(await (await get("/health")).json(), { status: "ok" });
     assert.deepEqual(await (await get("/api/v1/health")).json(), { status: "ok" });
 
     await mongoose.connect(mongoUri, { dbName: "finance_hosted_test_" + randomBytes(8).toString("hex") });
     await Promise.all([CashierAccount.init(), CashierSession.init()]);
-    assert.deepEqual(await (await get("/api/v1/ready")).json(), { status: "ready" });
+    const ready = await get("/api/v1/ready");
+    assert.deepEqual(await ready.json(), { status: "ready" });
+    assert.equal(ready.headers.get("x-finance-commit"), process.env.RENDER_GIT_COMMIT);
 
     await t.test("serves the compiled dashboard and its assets", {
       skip: !fs.existsSync(path.join(config.frontendDir, "index.html"))
@@ -71,10 +78,28 @@ test("hosted Finance protects setup and serves the app and API from one origin",
     assert.match(session, /; Secure/i);
     assert.match(session, /; HttpOnly/i);
     const cookie = session.split(";")[0];
+    const token = cookie.slice(cookie.indexOf("=") + 1);
+    assert.equal(jwt.verify(token, config.jwtSecret, { algorithms: ["HS256"] }).role, "owner");
     assert.equal((await get("/docs/")).status, 401);
     assert.equal((await get("/docs/", { Cookie: cookie })).status, 200);
+    const contract = await get("/docs/openapi.yaml", { Cookie: cookie });
+    assert.equal(contract.status, 200);
+    assert.equal(yaml.load(await contract.text()).servers[0].url, hostedOrigin);
     assert.equal((await get("/api/v1/payroll/runs", { Cookie: cookie })).status, 200);
     assert.equal((await get("/api/v1/missing", { Cookie: cookie })).status, 404);
+    assert.equal((await post("/api/v1/auth/login", { ...owner, tokenTransport: "unknown" })).status, 400);
+
+    const bearerLogin = await post("/api/v1/auth/login", { ...owner, tokenTransport: "bearer" });
+    assert.equal(bearerLogin.status, 200);
+    assert.equal(bearerLogin.headers.get("set-cookie"), null);
+    const { accessToken, tokenType, expiresIn } = await bearerLogin.json();
+    assert.equal(tokenType, "Bearer");
+    assert.equal(expiresIn, 28800);
+    const authorization = { Authorization: `Bearer ${accessToken}` };
+    assert.equal((await get("/api/v1/payroll/runs", authorization)).status, 200);
+    const logout = await fetch(base + "/api/v1/auth/logout", { method: "POST", headers: authorization });
+    assert.equal(logout.status, 204);
+    assert.equal((await get("/api/v1/payroll/runs", authorization)).status, 401);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     if (mongoose.connection.readyState === 1) {

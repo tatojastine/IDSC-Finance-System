@@ -1,4 +1,5 @@
 const path = require("node:path");
+const { randomBytes } = require("node:crypto");
 
 require("dotenv").config({ path: path.join(__dirname, ".env"), quiet: true });
 
@@ -27,6 +28,10 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be an integer from 1 to 65535.");
 }
 if (!mongoUri) throw new Error("Set MONGODB_URI to the hosted MongoDB connection string.");
+const jwtSecret = process.env.JWT_SECRET?.trim();
+if ((hosted || jwtSecret) && Buffer.byteLength(jwtSecret || "") < 32) {
+  throw new Error("Set JWT_SECRET to a securely generated secret of at least 32 bytes.");
+}
 
 module.exports = {
   hosted,
@@ -35,5 +40,6 @@ module.exports = {
   mongoUri,
   publicOrigin: hosted ? hostedOrigin() : null,
   ownerSetupKey: process.env.OWNER_SETUP_KEY,
+  jwtSecret: jwtSecret || randomBytes(32),
   frontendDir: path.join(__dirname, "..", "frontend", "dist")
 };

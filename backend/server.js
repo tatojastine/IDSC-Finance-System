@@ -59,10 +59,11 @@ if (config.hosted) {
     next();
   });
 }
+app.get("/docs/openapi.yaml", (req, res) => res.type("application/yaml").send(yaml.dump(swaggerDocument)));
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Health check
-app.get("/api/v1/health", (req, res) => {
+app.get(["/health", "/api/v1/health"], (req, res) => {
   res.json({
     status: "ok"
   });
@@ -70,6 +71,8 @@ app.get("/api/v1/health", (req, res) => {
 
 app.get("/api/v1/ready", async (req, res) => {
   res.set("Cache-Control", "no-store");
+  const commit = process.env.RENDER_GIT_COMMIT;
+  if (/^[a-f0-9]{40}$/i.test(commit ?? "")) res.set("X-Finance-Commit", commit);
   try {
     if (mongoose.connection.readyState !== 1) return res.status(503).json({ status: "unavailable" });
     await mongoose.connection.db.command({ ping: 1 }, { timeoutMS: 2000 });

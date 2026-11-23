@@ -37,8 +37,17 @@ tags:
 
 security:
   - cashierSession: []
+  - financeJwt: []
 
 paths:
+  /health:
+    get:
+      security: []
+      tags: [Health]
+      summary: Check API health without a version prefix
+      responses:
+        "200":
+          $ref: "#/paths/~1api~1v1~1health/get/responses/200"
   /api/v1/health:
     get:
       security: []
@@ -64,6 +73,10 @@ paths:
       responses:
         "200":
           description: Database reachable
+          headers:
+            X-Finance-Commit:
+              description: Deployed Git SHA when running on Render
+              schema: { type: string, pattern: "^[a-fA-F0-9]{40}$" }
           content:
             application/json:
               schema:
@@ -119,13 +132,14 @@ paths:
       responses:
         "201": { description: Pending cashier created and recovery code issued }
         "400": { description: Invalid account details }
-        "409": { description: Owner setup required, email taken, or cashier slots full }
+        "409": { description: "Owner setup required, email taken, or cashier slots full" }
         "429": { description: Too many attempts }
   /api/v1/auth/login:
     post:
       tags: [Account access]
       security: []
-      summary: Sign in and set the Finance session cookie
+      summary: Sign in and receive a Finance JWT
+      description: Browser clients receive an HttpOnly cookie by default. With bearer transport, send the returned accessToken as Authorization Bearer on subsequent requests.
       requestBody:
         required: true
         content:
@@ -137,8 +151,28 @@ paths:
                 email: { type: string, format: email }
                 password: { type: string, format: password }
                 remember: { type: boolean }
+                tokenTransport: { type: string, enum: [cookie, bearer], default: cookie }
       responses:
-        "200": { description: Owner or cashier signed in }
+        "200":
+          description: Owner or cashier signed in
+          headers:
+            Set-Cookie:
+              description: Signed Finance session JWT when using cookie transport
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, email, role, status]
+                properties:
+                  id: { type: string }
+                  email: { type: string, format: email }
+                  role: { type: string, enum: [owner, cashier] }
+                  status: { type: string, enum: [active] }
+                  accessToken: { type: string, description: JWT returned for bearer transport only }
+                  tokenType: { type: string, enum: [Bearer] }
+                  expiresIn: { type: integer, description: JWT lifetime in seconds when using bearer transport }
+        "400": { description: Invalid token transport }
         "401": { description: Email or password is incorrect }
         "403": { description: Cashier pending or inactive }
         "429": { description: Too many attempts }
@@ -147,7 +181,7 @@ paths:
       tags: [Account access]
       summary: Get the current account
       responses:
-        "200": { description: Current account ID, email, role and status }
+        "200": { description: "Current account ID, email, role and status" }
         "401": { description: Sign-in required }
   /api/v1/auth/logout:
     post:
@@ -1298,6 +1332,12 @@ components:
       type: apiKey
       in: cookie
       name: idsc_finance_session
+      description: Signed Finance JWT issued to the browser in an HttpOnly cookie.
+    financeJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Finance JWT from the login response when tokenTransport is bearer.
   parameters:
     Id:
       name: id
@@ -1567,7 +1607,8 @@ components:
           example: "REPLACE_WITH_ASSESSMENT_OBJECT_ID"
         amountPaid:
           type: number
-          exclusiveMinimum: 0
+          minimum: 0
+          exclusiveMinimum: true
           example: 5000
         paymentDate:
           type: string

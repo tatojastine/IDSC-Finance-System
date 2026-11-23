@@ -41,6 +41,10 @@ The owner’s [Faculty Payroll guide](docs/faculty-payroll.md) explains payroll 
 
 See the [Render staging guide](docs/render-staging.md) to host the dashboard and API together with a separate MongoDB Atlas database.
 
+The [shared gateway agreements log](docs/integration-agreements.md) tracks the partner contract and live integration evidence. The local partner tests use fictional data.
+
+The browser signs in with an HttpOnly JWT cookie. API clients can request `tokenTransport: bearer` at `POST /api/v1/auth/login` and send the returned JWT in the Authorization header. Existing browser sessions from before the JWT change require a new sign-in.
+
 ---
 
 # Technology Stack
