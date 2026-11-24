@@ -16,11 +16,11 @@ function EnrollmentForm({ cancel, complete }) {
   );
 }
 
-function ChargeForm({ enrollmentId, cancel, complete }) {
+function ChargeForm({ enrollment, cancel, complete }) {
   return (
-    <DataForm title="Add a charge" submitLabel="Save charge" onCancel={cancel}
+    <DataForm title={`Add a charge for ${enrollment.name}`} submitLabel="Save charge" onCancel={cancel}
       onSubmit={async ({ amount, ...fields }) => {
-        await api.addCharge({ ...fields, enrollmentId, amountMinor: toCentavos(amount) });
+        await api.addCharge({ ...fields, enrollmentId: enrollment._id, amountMinor: toCentavos(amount) });
         complete();
       }}>
       <Field label="Description" name="label" maxLength={140} />
@@ -133,10 +133,10 @@ function ChargeCard({ charge, showForm, showReceipt, paymentButtonRef }) {
   );
 }
 
-export function EnrollmentWorkspace({ owner, paymentView }) {
-  const [search, setSearch] = useState("");
-  const [query, setQuery] = useState({ search: "", page: 1 });
-  const [selection, setSelection] = useState({ id: "", jumpToPayment: false });
+export function EnrollmentWorkspace({ owner, paymentView, initialEnrollment, onOpenAccount }) {
+  const [search, setSearch] = useState(initialEnrollment?.studentId ?? "");
+  const [query, setQuery] = useState({ search: initialEnrollment?.studentId ?? "", page: 1 });
+  const [selection, setSelection] = useState({ id: initialEnrollment?._id ?? "", jumpToPayment: Boolean(initialEnrollment) });
   const selected = selection.id;
   const [form, setForm] = useState(null);
   const [receiptId, setReceiptId] = useState("");
@@ -216,9 +216,17 @@ export function EnrollmentWorkspace({ owner, paymentView }) {
           <ul className="finance-list">
             {list.data.rows.map((row) => <li key={row._id}>
               <div><strong>{row.name}</strong><p>{row.studentId} · {row.term} · {row.program}</p></div>
-              <button className="outline-btn" onClick={() => open(row._id, true)} aria-pressed={selected === row._id}>
-                {paymentView ? "View charges" : "Open account"}
-              </button>
+              <div className="finance-actions">
+                {manageEnrollments && <button className="outline-btn" onClick={() => {
+                  setNotice("");
+                  setForm({ kind: "charge", enrollment: row });
+                }}>Add charge</button>}
+                {paymentView ? (
+                  <button className="outline-btn" onClick={() => open(row._id, true)}>View charges</button>
+                ) : (
+                  <button className="outline-btn" onClick={() => onOpenAccount(row)}>Open account</button>
+                )}
+              </div>
             </li>)}
           </ul>
         ))}
@@ -233,11 +241,15 @@ export function EnrollmentWorkspace({ owner, paymentView }) {
 
       {notice && <p className="account-message" role="status">{notice}</p>}
       {form?.kind === "enrollment" && <EnrollmentForm cancel={closeForm} complete={(row) => {
-        open(row._id);
-        list.refresh();
+        closeForm();
+        setSearch(row.studentId);
+        setQuery({ search: row.studentId, page: 1 });
         setNotice("Enrollment saved.");
       }} />}
-      {form?.kind === "charge" && <ChargeForm enrollmentId={selected} cancel={closeForm} complete={() => completed("Charge saved.")} />}
+      {form?.kind === "charge" && <ChargeForm enrollment={form.enrollment} cancel={closeForm} complete={() => {
+        closeForm();
+        setNotice("Charge saved.");
+      }} />}
       {form?.kind === "payment" && <PaymentForm key={form.charge.id} charge={form.charge} cancel={closeForm} complete={(payment) => {
         setReceiptId(payment._id);
         completed("Payment saved. The receipt is ready to print.");
@@ -255,15 +267,11 @@ export function EnrollmentWorkspace({ owner, paymentView }) {
         <article className="panel finance-panel">
           <div className="finance-row">
             <div><h2 ref={accountHeading} tabIndex={-1}>{account.data.enrollment.name}</h2><p>{account.data.enrollment.studentId} · {account.data.enrollment.term}</p></div>
-            {!paymentView && <div><strong>{money(account.data.outstandingMinor)} outstanding</strong><p>{money(account.data.totalMinor)} assessed</p></div>}
-            {manageEnrollments && <button className="outline-btn" onClick={() => setForm({ kind: "charge" })}>Add charge</button>}
           </div>
-          {paymentView && (
-            <div className="finance-totals">
-              <div><span>Outstanding balance</span><strong>{money(account.data.outstandingMinor)}</strong></div>
-              <div><span>Total assessed</span><strong>{money(account.data.totalMinor)}</strong></div>
-            </div>
-          )}
+          <div className="finance-totals">
+            <div><span>Outstanding balance</span><strong>{money(account.data.outstandingMinor)}</strong></div>
+            <div><span>Total assessed</span><strong>{money(account.data.totalMinor)}</strong></div>
+          </div>
           {account.data.charges.length === 0 && <p>No charges for this term.</p>}
           {account.data.charges.map((charge) => <ChargeCard key={charge.id} charge={charge}
             paymentButtonRef={charge.id === firstPayable?.id ? paymentButton : undefined} showForm={(nextForm) => {

@@ -175,6 +175,7 @@ function App() {
 
   // Navigation state
   const [active, setActive] = useState("Dashboard");
+  const [paymentEnrollment, setPaymentEnrollment] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuToggle = useRef(null);
   const drawerClose = useRef(null);
@@ -184,6 +185,7 @@ function App() {
   const clearSession = useCallback(() => {
     setAccount(null);
     setActive("Dashboard");
+    setPaymentEnrollment(null);
     setMenuOpen(false);
     setToast("");
     setSessionLoading(true);
@@ -285,8 +287,9 @@ function App() {
     return () => window.removeEventListener("keydown", handleEscape);
   }, [menuOpen, closeMenu]);
 
-  function navigate(page) {
+  function navigate(page, enrollment = null) {
     setActive(page);
+    setPaymentEnrollment(enrollment);
     if (menuOpen) closeMenu();
   }
 
@@ -417,8 +420,11 @@ function App() {
 
         <div className="content">
           {active === "Dashboard" && <DailyCollections owner={owner} compact navigate={navigate} />}
-          {(active === "Students" || active === "Payments") && (
-            <EnrollmentWorkspace key={active} owner={owner} paymentView={active === "Payments"} />
+          {active === "Students" && (
+            <EnrollmentWorkspace key="Students" owner={owner} onOpenAccount={(row) => navigate("Payments", row)} />
+          )}
+          {active === "Payments" && (
+            <EnrollmentWorkspace key="Payments" paymentView initialEnrollment={paymentEnrollment} />
           )}
           {active === "Reports" && <DailyCollections owner={owner} />}
           {active === "Reversals" && owner && <ReversalQueue />}
