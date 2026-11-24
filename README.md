@@ -5,7 +5,7 @@ The Finance module for the IDSC College Management System. It records student ch
 ## Use the live site
 
 1. Open the [live Finance site](https://idsc-finance-system.onrender.com/).
-2. If you already have an account, sign in with your email and password. The live classroom site already has an owner.
+2. If you already have an account, sign in with your email and password. If the site shows **Create the owner account**, follow the [owner setup key instructions](#how-to-get-the-owner-setup-key) below.
 3. If you need cashier access and a slot is available, choose **Register as a cashier**. Ask the owner to approve your request under **Cashier Accounts**. You can sign in when your account is active.
 
 Use **Forgot password?** with the recovery code you saved when you registered. If you are still signed in, you can generate a replacement under **Settings** using your current password.
@@ -52,13 +52,16 @@ You need **Git**, **VS Code**, **Node.js 24** with npm, and **MongoDB**. The ste
 
 Run the two install commands again when the corresponding dependencies change. On an ordinary restart, start the database, backend, and frontend. The default local database is `idsc_finance` on `127.0.0.1:27017`. It is separate from the hosted database when you use the defaults.
 
-## Set up the first owner on a new hosted site
+## How to get the owner setup key
 
-Use the [Render and MongoDB Atlas setup guide](docs/render-staging.md) to deploy your own copy. Then follow [Create the first owner](docs/render-staging.md#4-create-the-first-owner) to generate and enter the **Owner setup key**.
+If the hosted site shows **Create the owner account**, get the key from the Render service that runs that site. You need access to that service's Render dashboard.
 
-- The person managing Render generates the key and stores it privately in the service's **Environment** settings under `OWNER_SETUP_KEY`.
-- On the new site's **Create the owner account** screen, enter the same value along with your email and password. Save the recovery code displayed after setup.
-- The setup key is only for creating the first hosted owner. After that, use your email and password to sign in and your recovery code if you forget your password.
+1. Sign in to the [Render dashboard](https://dashboard.render.com/) and open **idsc-finance-system**. If you deployed your own copy, open its service and check that the URL matches the site you are setting up.
+2. In the service sidebar, select **Environment**. Under **Environment Variables**, find the row named `OWNER_SETUP_KEY`.
+3. Click **Copy value** on that row. Return to **Create the owner account** and paste the copied value into **Owner setup key**.
+4. Enter your email and a password of at least 12 characters, then choose **Create owner account**. Save the recovery code shown afterward for **Forgot password?**.
+
+If the row is missing, a Render service administrator can [create and save the key](docs/render-staging.md#create-a-key-if-the-variable-is-missing). The [full hosting guide](docs/render-staging.md) covers new deployments. Keep the key value private. After owner setup, sign in with your email and password.
 
 ## Guides and API
 

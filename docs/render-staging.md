@@ -27,7 +27,7 @@ Run this command in a terminal with Node.js installed. Run it once for `JWT_SECR
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-Keep the connection string and both generated values private. Save the new service and wait until its first deployment is live. For an existing service that needs the key before first-time setup, open **Environment → Add variable**, set **Key** to `OWNER_SETUP_KEY`, and paste your generated value into **Value**. Choose **Save and deploy** and wait for the service to finish updating. [Render environment variables](https://render.com/docs/configure-environment-variables)
+Keep the connection string and both generated values private. Save the new service and wait until its first deployment is live. If you are setting up an existing service, follow [Create a key if the variable is missing](#create-a-key-if-the-variable-is-missing). [Render environment variables](https://render.com/docs/configure-environment-variables)
 
 ## 3. Connect GitHub Actions
 
@@ -38,12 +38,37 @@ Keep the connection string and both generated values private. Save the new servi
 
 ## 4. Create the first owner
 
-1. Open your new Render site. On a fresh database, you should see **Create the owner account**.
-2. Enter your email and a password of at least 12 characters. In **Owner setup key**, paste the value stored under `OWNER_SETUP_KEY` on that Render service.
-3. Select **Create owner account** and save the one-time recovery code somewhere private. The recovery code is used with **Forgot password?**.
-4. Sign in with your owner email and password. The setup key is only used during first-time registration. If the site opens at **Sign in to Finance**, an owner already exists for that database.
+### Copy the existing key from Render
 
-If Finance asks for a valid setup key, check that you copied the exact `OWNER_SETUP_KEY` value and that Render has finished deploying the environment change. If you manage the service and lost the value before the owner was created, generate a new value, update `OWNER_SETUP_KEY` in Render, and use it after the deployment finishes. Public GitHub stores the instructions. The key itself is stored in Render.
+Use these steps when Finance shows **Create the owner account**, including after a database reset. The key is stored in Render separately from the database.
+
+1. Sign in to the [Render dashboard](https://dashboard.render.com/) using an account with access to your Finance service.
+2. Open **idsc-finance-system** for the classroom site. For your own deployment, select the service whose public URL matches your Finance site.
+3. Click **Environment** in the service sidebar. Under **Environment Variables**, find the row named `OWNER_SETUP_KEY`.
+4. Click **Copy value** in that row. The dots in the **Value** column mean Render is hiding the key on screen. **Copy value** copies the full key.
+5. Return to the Finance site and paste it into **Owner setup key**. Enter your email and a password of at least 12 characters, then click **Create owner account**.
+6. Save the recovery code shown after registration. Use it with **Forgot password?**. For ordinary sign-in, use your email and password.
+
+### Create a key if the variable is missing
+
+1. Open a terminal with Node.js installed and run this command. Copy the 64-character value it prints.
+
+   ```powershell
+   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+   ```
+
+2. Open the Finance service in Render and choose **Environment**. Under **Environment Variables**, click **Edit** if shown, then **Add variable**.
+3. Enter `OWNER_SETUP_KEY` in **Key** and paste the generated value into **Value**. Choose **Save and deploy**. If this is a new service, finish creating it with the new variable.
+4. Wait for the service to finish deploying. Return to **Create the owner account** and follow the steps above with the saved value. Keep the value in Render and out of GitHub and chat.
+
+### If you get stuck
+
+| What you see | What to do |
+|---|---|
+| **Enter the valid owner setup key** | Check you opened the matching Render service and clicked **Copy value** on the `OWNER_SETUP_KEY` row. Paste the copied value again. If the key was just added or changed, wait for the deploy to finish. |
+| **The host must configure the owner setup key** | Ask the Render service administrator to save a key of at least 32 characters and deploy the change. The command above generates 64 characters. |
+| You cannot open the Render service | Ask the person who manages hosting to complete first-owner setup. |
+| **Sign in to Finance** | An owner already exists. Use the account's email and password. |
 
 ## 5. Check that it works
 
