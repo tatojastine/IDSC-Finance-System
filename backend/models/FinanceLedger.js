@@ -46,6 +46,8 @@ const chargeSchema = new Schema({
   source: String,
   reference: String,
   createdBy: String,
+  tuitionInstallment: { type: String, enum: ["prelim", "midterm", "pre-finals", "finals"] },
+  dueDate: String,
   key: { type: String, required: true, unique: true },
   payments: [paymentSchema],
   revision: { type: Number, default: 0 }
@@ -56,6 +58,12 @@ chargeSchema.index({ "payments.key": 1 }, {
 chargeSchema.index({ "payments._id": 1 });
 chargeSchema.index({ "payments.postedAt": 1 });
 chargeSchema.index({ "payments.reversals.decidedAt": 1 });
+chargeSchema.index({ enrollmentId: 1, tuitionInstallment: 1 }, {
+  unique: true, partialFilterExpression: { tuitionInstallment: { $type: "string" } }
+});
+chargeSchema.index({ dueDate: 1, _id: 1 }, {
+  partialFilterExpression: { dueDate: { $type: "string" } }
+});
 
 const partnerItemSchema = new Schema({
   partner: { type: String, enum: ["inventory", "faculty"], required: true },

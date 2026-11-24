@@ -2,8 +2,8 @@
 
 ## Classroom demonstration
 
-1. Sign in as the owner. Under **Students**, add a fictional enrollment such as `DEMO-001`, `2026-2027 T1`, then open its account. Add a Tuition charge for ₱10,000 with reference `TUITION-DEMO-01`.
-2. From an approved cashier account, open the enrollment under **Payments** and record ₱4,000 in Cash. Open and print its receipt. The account should show ₱6,000 outstanding. Check again after a refresh.
+1. Sign in as the owner. Under **Students**, add a fictional enrollment such as `DEMO-001`, `2026-2027 T1`. Click **Add charge** next to the enrollment and add a ₱10,000 Tuition charge with reference `TUITION-DEMO-01`.
+2. From an approved cashier account, click **Open account** on the student's row to go directly to their account in **Payments**. Record ₱4,000 in Cash, then open and print its receipt. Reopen the account after a refresh and confirm that ₱6,000 is outstanding.
 3. Open **Reports** and choose the payment’s Philippine business date. The cashier sees their own collections. The owner can see all cashier and system collections, grouped by collector and method. **Download CSV** exports those totals.
 4. Request a reversal with a reason. The balance stays the same while the request is pending. The owner approves or rejects it from **Reversals**. Approval reopens the charge balance, preserves the original payment, and reports the reversal on the approval date. The receipt is then marked reversed.
 

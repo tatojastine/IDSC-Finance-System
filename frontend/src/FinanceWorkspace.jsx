@@ -4,6 +4,13 @@ import * as api from "./Api.js";
 import { DataForm, Field, PesosField, ResourceNotice } from "./FinanceForms.jsx";
 import { dateTime, manilaDay, money, toCentavos, useResource } from "./financeUi.js";
 
+const installmentLabels = { prelim: "Prelim", midterm: "Midterm", "pre-finals": "Pre-finals", finals: "Finals" };
+
+function dueStatus(dueDate, today) {
+  if (dueDate < today) return "Overdue";
+  return dueDate === today ? "Due today" : "Upcoming";
+}
+
 function EnrollmentForm({ cancel, complete }) {
   return (
     <DataForm title="Add an enrollment" submitLabel="Save enrollment" onCancel={cancel}
@@ -16,16 +23,27 @@ function EnrollmentForm({ cancel, complete }) {
   );
 }
 
-function ChargeForm({ enrollmentId, cancel, complete }) {
+function ChargeForm({ enrollment, cancel, complete }) {
+  const [installment, setInstallment] = useState("");
   return (
-    <DataForm title="Add a charge" submitLabel="Save charge" onCancel={cancel}
-      onSubmit={async ({ amount, ...fields }) => {
-        await api.addCharge({ ...fields, enrollmentId, amountMinor: toCentavos(amount) });
+    <DataForm title={`Add a charge for ${enrollment.name}`} submitLabel="Save charge" onCancel={cancel}
+      onSubmit={async ({ amount, tuitionInstallment, dueDate, ...fields }) => {
+        await api.addCharge({
+          ...fields, enrollmentId: enrollment._id, amountMinor: toCentavos(amount),
+          ...(tuitionInstallment && { tuitionInstallment, dueDate })
+        });
         complete();
       }}>
       <Field label="Description" name="label" maxLength={140} />
       <Field label="Assessment reference" name="reference" maxLength={80} />
       <PesosField />
+      <label>Tuition installment
+        <select name="tuitionInstallment" value={installment} onChange={(event) => setInstallment(event.target.value)}>
+          <option value="">General charge</option>
+          {Object.entries(installmentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>
+      {installment && <Field label="Due date" name="dueDate" type="date" />}
     </DataForm>
   );
 }
@@ -99,6 +117,11 @@ function ChargeCard({ charge, showForm, showReceipt, paymentButtonRef }) {
         <div><strong>{money(charge.outstandingMinor)} outstanding</strong><p>{money(charge.amountMinor)} assessed</p></div>
         {charge.outstandingMinor > 0 && <button ref={paymentButtonRef} className="primary-btn" onClick={() => showForm({ kind: "payment", charge })}>Record payment</button>}
       </div>
+      {charge.dueDate && (
+        <p>{installmentLabels[charge.tuitionInstallment]} · Due {charge.dueDate} · {
+          charge.outstandingMinor > 0 ? dueStatus(charge.dueDate, manilaDay.format(new Date())) : "Paid"
+        }</p>
+      )}
       {charge.payments.length > 0 && (
         <ul className="finance-history">
           {charge.payments.slice().reverse().map((payment) => {
@@ -133,10 +156,10 @@ function ChargeCard({ charge, showForm, showReceipt, paymentButtonRef }) {
   );
 }
 
-export function EnrollmentWorkspace({ owner, paymentView }) {
-  const [search, setSearch] = useState("");
-  const [query, setQuery] = useState({ search: "", page: 1 });
-  const [selection, setSelection] = useState({ id: "", jumpToPayment: false });
+export function EnrollmentWorkspace({ owner, paymentView, initialEnrollment, onOpenAccount }) {
+  const [search, setSearch] = useState(initialEnrollment?.studentId ?? "");
+  const [query, setQuery] = useState({ search: initialEnrollment?.studentId ?? "", page: 1 });
+  const [selection, setSelection] = useState({ id: initialEnrollment?._id ?? "", jumpToPayment: Boolean(initialEnrollment) });
   const selected = selection.id;
   const [form, setForm] = useState(null);
   const [receiptId, setReceiptId] = useState("");
@@ -216,9 +239,17 @@ export function EnrollmentWorkspace({ owner, paymentView }) {
           <ul className="finance-list">
             {list.data.rows.map((row) => <li key={row._id}>
               <div><strong>{row.name}</strong><p>{row.studentId} · {row.term} · {row.program}</p></div>
-              <button className="outline-btn" onClick={() => open(row._id, true)} aria-pressed={selected === row._id}>
-                {paymentView ? "View charges" : "Open account"}
-              </button>
+              <div className="finance-actions">
+                {manageEnrollments && <button className="outline-btn" onClick={() => {
+                  setNotice("");
+                  setForm({ kind: "charge", enrollment: row });
+                }}>Add charge</button>}
+                {paymentView ? (
+                  <button className="outline-btn" onClick={() => open(row._id, true)}>View charges</button>
+                ) : (
+                  <button className="outline-btn" onClick={() => onOpenAccount(row)}>Open account</button>
+                )}
+              </div>
             </li>)}
           </ul>
         ))}
@@ -233,11 +264,15 @@ export function EnrollmentWorkspace({ owner, paymentView }) {
 
       {notice && <p className="account-message" role="status">{notice}</p>}
       {form?.kind === "enrollment" && <EnrollmentForm cancel={closeForm} complete={(row) => {
-        open(row._id);
-        list.refresh();
+        closeForm();
+        setSearch(row.studentId);
+        setQuery({ search: row.studentId, page: 1 });
         setNotice("Enrollment saved.");
       }} />}
-      {form?.kind === "charge" && <ChargeForm enrollmentId={selected} cancel={closeForm} complete={() => completed("Charge saved.")} />}
+      {form?.kind === "charge" && <ChargeForm enrollment={form.enrollment} cancel={closeForm} complete={() => {
+        closeForm();
+        setNotice("Charge saved.");
+      }} />}
       {form?.kind === "payment" && <PaymentForm key={form.charge.id} charge={form.charge} cancel={closeForm} complete={(payment) => {
         setReceiptId(payment._id);
         completed("Payment saved. The receipt is ready to print.");
@@ -255,15 +290,11 @@ export function EnrollmentWorkspace({ owner, paymentView }) {
         <article className="panel finance-panel">
           <div className="finance-row">
             <div><h2 ref={accountHeading} tabIndex={-1}>{account.data.enrollment.name}</h2><p>{account.data.enrollment.studentId} · {account.data.enrollment.term}</p></div>
-            {!paymentView && <div><strong>{money(account.data.outstandingMinor)} outstanding</strong><p>{money(account.data.totalMinor)} assessed</p></div>}
-            {manageEnrollments && <button className="outline-btn" onClick={() => setForm({ kind: "charge" })}>Add charge</button>}
           </div>
-          {paymentView && (
-            <div className="finance-totals">
-              <div><span>Outstanding balance</span><strong>{money(account.data.outstandingMinor)}</strong></div>
-              <div><span>Total assessed</span><strong>{money(account.data.totalMinor)}</strong></div>
-            </div>
-          )}
+          <div className="finance-totals">
+            <div><span>Outstanding balance</span><strong>{money(account.data.outstandingMinor)}</strong></div>
+            <div><span>Total assessed</span><strong>{money(account.data.totalMinor)}</strong></div>
+          </div>
           {account.data.charges.length === 0 && <p>No charges for this term.</p>}
           {account.data.charges.map((charge) => <ChargeCard key={charge.id} charge={charge}
             paymentButtonRef={charge.id === firstPayable?.id ? paymentButton : undefined} showForm={(nextForm) => {
@@ -283,6 +314,57 @@ function saveDailyReport(blob, date) {
   link.download = `IDSC-collections-${date}.csv`;
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function TuitionBalances() {
+  const [filter, setFilter] = useState({ status: "overdue", page: 1 });
+  const load = useCallback(() => api.getTuitionBalances(filter.status, filter.page), [filter]);
+  const report = useResource(load);
+  const data = report.data;
+  return (
+    <section className="panel finance-panel">
+      <div className="finance-row">
+        <h2>Tuition balances</h2>
+        <div className="finance-actions">
+          <label>Show installments
+            <select value={filter.status} onChange={(event) => setFilter({ status: event.target.value, page: 1 })}>
+              <option value="overdue">Overdue only</option>
+              <option value="outstanding">All outstanding</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      {!data ? <ResourceNotice resource={report} /> : (
+        <>
+          <p>As of {data.today} · Asia/Manila</p>
+          {data.rows.length === 0 ? <p>No {filter.status} tuition installments on this page.</p> : (
+            <div className="finance-table-wrap">
+              <table className="finance-table">
+                <thead><tr><th>Student</th><th>Term</th><th>Installment</th><th>Due date</th><th>Outstanding</th><th>Status</th></tr></thead>
+                <tbody>
+                  {data.rows.map((row) => (
+                    <tr key={row.chargeId}>
+                      <td><strong>{row.studentName}</strong><p>{row.studentId}</p></td>
+                      <td>{row.term}</td><td>{installmentLabels[row.tuitionInstallment]}</td>
+                      <td>{row.dueDate}</td><td>{money(row.outstandingMinor)}</td>
+                      <td>{dueStatus(row.dueDate, data.today)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {(filter.page > 1 || data.hasMore) && (
+            <div className="finance-actions">
+              <button className="outline-btn" disabled={filter.page === 1} onClick={() => setFilter({ ...filter, page: filter.page - 1 })}>Previous</button>
+              <span>Page {filter.page}</span>
+              <button className="outline-btn" disabled={!data.hasMore} onClick={() => setFilter({ ...filter, page: filter.page + 1 })}>Next</button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
 }
 
 export function DailyCollections({ owner, compact = false, navigate }) {
@@ -352,16 +434,18 @@ export function DailyCollections({ owner, compact = false, navigate }) {
       </div>
       {!compact && !!data?.rows.length && (
         <div className="panel finance-panel">
-          <h3>Payment activity</h3>
+          <h3>Payments and approved reversals</h3>
           <ul className="finance-list">
             {data.rows.map((row) => <li key={`${row.paymentId}:${row.type}`}>
               <div><strong>{row.type === "collection" ? "Payment" : "Reversal"} · {money(row.amountMinor)} · {row.method}</strong>
+                {row.studentName && <p>{[row.studentName, row.studentId, row.term, row.charge].filter(Boolean).join(" · ")}</p>}
                 <p className="finance-reference">{row.receiptNumber} · {dateTime(row.at)} · {row.postedBy}</p></div>
-              {row.decidedBy && <p>Approved by {row.decidedBy}</p>}
+              {row.decidedBy && <div><p>Approved by {row.decidedBy}</p>{row.reason && <p>{row.reason}</p>}</div>}
             </li>)}
           </ul>
         </div>
       )}
+      {!compact && owner && <TuitionBalances />}
     </section>
   );
 }
