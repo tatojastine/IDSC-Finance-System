@@ -91,13 +91,13 @@ function Receipt({ id, close }) {
   );
 }
 
-function ChargeCard({ charge, showForm, showReceipt }) {
+function ChargeCard({ charge, showForm, showReceipt, paymentButtonRef }) {
   return (
     <section className="finance-charge">
       <div className="finance-row">
         <div><h3>{charge.label}</h3><p>{charge.source} · {charge.reference}</p></div>
         <div><strong>{money(charge.outstandingMinor)} outstanding</strong><p>{money(charge.amountMinor)} assessed</p></div>
-        {charge.outstandingMinor > 0 && <button className="primary-btn" onClick={() => showForm({ kind: "payment", charge })}>Record payment</button>}
+        {charge.outstandingMinor > 0 && <button ref={paymentButtonRef} className="primary-btn" onClick={() => showForm({ kind: "payment", charge })}>Record payment</button>}
       </div>
       {charge.payments.length > 0 && (
         <ul className="finance-history">
@@ -136,7 +136,8 @@ function ChargeCard({ charge, showForm, showReceipt }) {
 export function EnrollmentWorkspace({ owner, paymentView }) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState({ search: "", page: 1 });
-  const [selected, setSelected] = useState("");
+  const [selection, setSelection] = useState({ id: "", jumpToPayment: false });
+  const selected = selection.id;
   const [form, setForm] = useState(null);
   const [receiptId, setReceiptId] = useState("");
   const [notice, setNotice] = useState("");
@@ -144,10 +145,27 @@ export function EnrollmentWorkspace({ owner, paymentView }) {
   const loadAccount = useCallback(() => selected ? api.getEnrollment(selected) : Promise.resolve(null), [selected]);
   const list = useResource(loadList);
   const account = useResource(loadAccount);
+  const accountHeading = useRef(null);
+  const paymentButton = useRef(null);
+  const lastScrolledSelection = useRef(null);
+  const firstPayable = account.data?.charges.find((charge) => charge.outstandingMinor > 0);
   const closeForm = () => setForm(null);
 
-  function open(id) {
-    setSelected(id);
+  useEffect(() => {
+    if (!selection.jumpToPayment || !account.data || lastScrolledSelection.current === selection) return;
+    const target = paymentButton.current ?? accountHeading.current;
+    if (!target) return;
+
+    lastScrolledSelection.current = selection;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({
+      block: "center",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"
+    });
+  }, [selection, account.data]);
+
+  function open(id, jumpToPayment = false) {
+    setSelection({ id, jumpToPayment });
     setForm(null);
     setReceiptId("");
     setNotice("");
@@ -180,7 +198,7 @@ export function EnrollmentWorkspace({ owner, paymentView }) {
           <ul className="finance-list">
             {list.data.rows.map((row) => <li key={row._id}>
               <div><strong>{row.name}</strong><p>{row.studentId} · {row.term} · {row.program}</p></div>
-              <button className="outline-btn" onClick={() => open(row._id)} aria-pressed={selected === row._id}>Open account</button>
+              <button className="outline-btn" onClick={() => open(row._id, true)} aria-pressed={selected === row._id}>Open account</button>
             </li>)}
           </ul>
         )}
@@ -216,12 +234,13 @@ export function EnrollmentWorkspace({ owner, paymentView }) {
       {selected && (!account.data ? <ResourceNotice resource={account} /> : (
         <article className="panel finance-panel">
           <div className="finance-row">
-            <div><h2>{account.data.enrollment.name}</h2><p>{account.data.enrollment.studentId} · {account.data.enrollment.term}</p></div>
+            <div><h2 ref={accountHeading} tabIndex={-1}>{account.data.enrollment.name}</h2><p>{account.data.enrollment.studentId} · {account.data.enrollment.term}</p></div>
             <div><strong>{money(account.data.outstandingMinor)} outstanding</strong><p>{money(account.data.totalMinor)} assessed</p></div>
             {owner && <button className="outline-btn" onClick={() => setForm({ kind: "charge" })}>Add charge</button>}
           </div>
           {account.data.charges.length === 0 && <p>No charges for this term.</p>}
-          {account.data.charges.map((charge) => <ChargeCard key={charge.id} charge={charge} showForm={(nextForm) => {
+          {account.data.charges.map((charge) => <ChargeCard key={charge.id} charge={charge}
+            paymentButtonRef={charge.id === firstPayable?.id ? paymentButton : undefined} showForm={(nextForm) => {
             setForm(nextForm);
             setReceiptId("");
           }} showReceipt={setReceiptId} />)}
