@@ -418,7 +418,7 @@ function App() {
         <div className="content">
           {active === "Dashboard" && <DailyCollections owner={owner} compact navigate={navigate} />}
           {(active === "Students" || active === "Payments") && (
-            <EnrollmentWorkspace owner={owner} paymentView={active === "Payments"} />
+            <EnrollmentWorkspace key={active} owner={owner} paymentView={active === "Payments"} />
           )}
           {active === "Reports" && <DailyCollections owner={owner} />}
           {active === "Reversals" && owner && <ReversalQueue />}
