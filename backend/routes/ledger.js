@@ -72,6 +72,10 @@ router.get("/reports/daily", async (req, res) => {
   res.json(await ledger.dailyReport(req.query.date, req.account));
 });
 
+router.get("/reports/tuition", ownerOnly, async (req, res) => {
+  res.json(await ledger.tuitionBalances(req.query.status ?? "overdue", Number(req.query.page ?? 1)));
+});
+
 router.get("/reports/daily.csv", async (req, res) => {
   const report = await ledger.dailyReport(req.query.date, req.account);
   res.attachment(`IDSC-collections-${report.date}.csv`);

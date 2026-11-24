@@ -4,6 +4,13 @@ import * as api from "./Api.js";
 import { DataForm, Field, PesosField, ResourceNotice } from "./FinanceForms.jsx";
 import { dateTime, manilaDay, money, toCentavos, useResource } from "./financeUi.js";
 
+const installmentLabels = { prelim: "Prelim", midterm: "Midterm", "pre-finals": "Pre-finals", finals: "Finals" };
+
+function dueStatus(dueDate, today) {
+  if (dueDate < today) return "Overdue";
+  return dueDate === today ? "Due today" : "Upcoming";
+}
+
 function EnrollmentForm({ cancel, complete }) {
   return (
     <DataForm title="Add an enrollment" submitLabel="Save enrollment" onCancel={cancel}
@@ -17,15 +24,26 @@ function EnrollmentForm({ cancel, complete }) {
 }
 
 function ChargeForm({ enrollment, cancel, complete }) {
+  const [installment, setInstallment] = useState("");
   return (
     <DataForm title={`Add a charge for ${enrollment.name}`} submitLabel="Save charge" onCancel={cancel}
-      onSubmit={async ({ amount, ...fields }) => {
-        await api.addCharge({ ...fields, enrollmentId: enrollment._id, amountMinor: toCentavos(amount) });
+      onSubmit={async ({ amount, tuitionInstallment, dueDate, ...fields }) => {
+        await api.addCharge({
+          ...fields, enrollmentId: enrollment._id, amountMinor: toCentavos(amount),
+          ...(tuitionInstallment && { tuitionInstallment, dueDate })
+        });
         complete();
       }}>
       <Field label="Description" name="label" maxLength={140} />
       <Field label="Assessment reference" name="reference" maxLength={80} />
       <PesosField />
+      <label>Tuition installment
+        <select name="tuitionInstallment" value={installment} onChange={(event) => setInstallment(event.target.value)}>
+          <option value="">General charge</option>
+          {Object.entries(installmentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+      </label>
+      {installment && <Field label="Due date" name="dueDate" type="date" />}
     </DataForm>
   );
 }
@@ -99,6 +117,11 @@ function ChargeCard({ charge, showForm, showReceipt, paymentButtonRef }) {
         <div><strong>{money(charge.outstandingMinor)} outstanding</strong><p>{money(charge.amountMinor)} assessed</p></div>
         {charge.outstandingMinor > 0 && <button ref={paymentButtonRef} className="primary-btn" onClick={() => showForm({ kind: "payment", charge })}>Record payment</button>}
       </div>
+      {charge.dueDate && (
+        <p>{installmentLabels[charge.tuitionInstallment]} · Due {charge.dueDate} · {
+          charge.outstandingMinor > 0 ? dueStatus(charge.dueDate, manilaDay.format(new Date())) : "Paid"
+        }</p>
+      )}
       {charge.payments.length > 0 && (
         <ul className="finance-history">
           {charge.payments.slice().reverse().map((payment) => {
@@ -293,6 +316,57 @@ function saveDailyReport(blob, date) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function TuitionBalances() {
+  const [filter, setFilter] = useState({ status: "overdue", page: 1 });
+  const load = useCallback(() => api.getTuitionBalances(filter.status, filter.page), [filter]);
+  const report = useResource(load);
+  const data = report.data;
+  return (
+    <section className="panel finance-panel">
+      <div className="finance-row">
+        <h2>Tuition balances</h2>
+        <div className="finance-actions">
+          <label>Show installments
+            <select value={filter.status} onChange={(event) => setFilter({ status: event.target.value, page: 1 })}>
+              <option value="overdue">Overdue only</option>
+              <option value="outstanding">All outstanding</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      {!data ? <ResourceNotice resource={report} /> : (
+        <>
+          <p>As of {data.today} · Asia/Manila</p>
+          {data.rows.length === 0 ? <p>No {filter.status} tuition installments on this page.</p> : (
+            <div className="finance-table-wrap">
+              <table className="finance-table">
+                <thead><tr><th>Student</th><th>Term</th><th>Installment</th><th>Due date</th><th>Outstanding</th><th>Status</th></tr></thead>
+                <tbody>
+                  {data.rows.map((row) => (
+                    <tr key={row.chargeId}>
+                      <td><strong>{row.studentName}</strong><p>{row.studentId}</p></td>
+                      <td>{row.term}</td><td>{installmentLabels[row.tuitionInstallment]}</td>
+                      <td>{row.dueDate}</td><td>{money(row.outstandingMinor)}</td>
+                      <td>{dueStatus(row.dueDate, data.today)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {(filter.page > 1 || data.hasMore) && (
+            <div className="finance-actions">
+              <button className="outline-btn" disabled={filter.page === 1} onClick={() => setFilter({ ...filter, page: filter.page - 1 })}>Previous</button>
+              <span>Page {filter.page}</span>
+              <button className="outline-btn" disabled={!data.hasMore} onClick={() => setFilter({ ...filter, page: filter.page + 1 })}>Next</button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 export function DailyCollections({ owner, compact = false, navigate }) {
   const [date, setDate] = useState(() => manilaDay.format(new Date()));
   const [exporting, setExporting] = useState(false);
@@ -360,16 +434,18 @@ export function DailyCollections({ owner, compact = false, navigate }) {
       </div>
       {!compact && !!data?.rows.length && (
         <div className="panel finance-panel">
-          <h3>Payment activity</h3>
+          <h3>Payments and approved reversals</h3>
           <ul className="finance-list">
             {data.rows.map((row) => <li key={`${row.paymentId}:${row.type}`}>
               <div><strong>{row.type === "collection" ? "Payment" : "Reversal"} · {money(row.amountMinor)} · {row.method}</strong>
+                {row.studentName && <p>{[row.studentName, row.studentId, row.term, row.charge].filter(Boolean).join(" · ")}</p>}
                 <p className="finance-reference">{row.receiptNumber} · {dateTime(row.at)} · {row.postedBy}</p></div>
-              {row.decidedBy && <p>Approved by {row.decidedBy}</p>}
+              {row.decidedBy && <div><p>Approved by {row.decidedBy}</p>{row.reason && <p>{row.reason}</p>}</div>}
             </li>)}
           </ul>
         </div>
       )}
+      {!compact && owner && <TuitionBalances />}
     </section>
   );
 }

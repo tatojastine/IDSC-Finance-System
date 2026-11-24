@@ -70,7 +70,7 @@
 }
 
 .finance-fields :is(input, select),
-.finance-actions input {
+.finance-actions :is(input, select) {
   padding: 9px 11px;
   background: var(--finance-surface);
   border: 1px solid var(--finance-border);

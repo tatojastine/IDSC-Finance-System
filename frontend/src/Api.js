@@ -54,6 +54,8 @@ export const getReversals = () => request("/ledger/reversals");
 export const reviewReversal = (id, status, note) =>
   request(`/ledger/payments/${id}/reversal`, { method: "PATCH", body: { status, note } });
 export const getDailyReport = (date) => request(`/ledger/reports/daily?date=${encodeURIComponent(date)}`);
+export const getTuitionBalances = (status, page) =>
+  request(`/ledger/reports/tuition?${new URLSearchParams({ status, page })}`);
 export const downloadDailyReport = (date) =>
   request(`/ledger/reports/daily.csv?date=${encodeURIComponent(date)}`, { format: "blob" });
 export const getPartnerItems = () => request("/ledger/partner-items");

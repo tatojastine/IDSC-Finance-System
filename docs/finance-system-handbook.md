@@ -4,7 +4,7 @@
 
 System Integration and Architecture school project
 
-Updated November 23, 2026
+Updated November 24, 2026
 
 ## 1. What the system does
 
@@ -45,13 +45,13 @@ The live app supports **one owner account and up to two cashier accounts**. Pend
 | Prepare and finalize faculty payroll, print payslips, and record a settlement | Yes | — |
 | Replace own recovery code and sign out | Yes | Yes |
 
-A cashier with status `pending` or `inactive` cannot sign in. The first person completing setup of an empty installation claims the owner slot. Complete that step locally before sharing a new installation.
+A cashier with status `pending` or `inactive` cannot sign in. On a hosted installation, the intended owner creates the first account using the setup key configured by the host.
 
 ## 4. Every feature in the running app
 
 | Feature or screen | What it actually does |
 |---|---|
-| **First-run setup** | Opens **Create the owner account** when the database has no owner. The backend enforces one owner even if two people submit at the same time. The owner receives a one-time recovery code. |
+| **First-run setup** | Opens **Create the owner account** when the database has no owner. Hosted setup requires the host’s `OWNER_SETUP_KEY`. The backend allows one owner, and that account receives a one-time recovery code. |
 | **Cashier registration** | Accepts an email and a password and creates a pending account if a slot is open. The sign-in page shows when both slots are occupied. There is no invitation step in the current workflow. |
 | **Cashier Accounts** | Shows the owner the slot count and each account’s status. Approve changes pending to active. Deactivate blocks use and invalidates sessions. Activate restores sign-in with a fresh session. Delete removes access and frees the slot after confirmation. |
 | **Sign in and sign out** | Checks the email and password against the saved account. The server validates sessions on protected requests. Signing out removes the current session. A regular session expires after eight hours. **Remember me** makes it persist for up to seven days. |
@@ -61,17 +61,34 @@ A cashier with status `pending` or `inactive` cannot sign in. The first person c
 | **Sidebar** | Groups student, payment, reversal, and reporting screens under Collections. The owner’s payroll and partner reviews are under Operations. Settings and the owner’s cashier management are under Account. On small screens the menu opens as a drawer. |
 | **Dashboard** | Shows today’s collected, reversed and net amounts from the ledger, scoped to the signed-in account. It links to student search and daily reports. |
 | **Students** | Searches by student ID, name, or term and pages the results. The owner can add enrollments and charges here. **Open account** takes the selected enrollment to **Payments**, where the account shows its term, assessed amount, outstanding balance, charges, and payment history. |
-| **Charges** | Records an assessed amount, description, and reference against an enrollment. Each charge has its own outstanding amount. The sum of the charge balances is the enrollment’s outstanding balance. |
+| **Charges** | Records an amount the student owes against one enrollment. Each charge has a description, reference, and outstanding balance. The sum of the charge balances is the enrollment’s outstanding balance. |
+| **Tuition installments** | The owner can create a Prelim, Midterm, Pre-finals, or Finals charge with its own amount and due date. A student can pay part of any installment. Finance tracks the remaining amount and labels a dated charge Upcoming, Due today, Overdue, or Paid. |
 | **Payments** | Lets an owner or cashier pay one selected charge at a time. Payment methods are Cash, Bank Transfer, Online Payment, and Other. Non-cash payments need a reference. The backend rejects overpayment and returns the same receipt on an identical payment retry. |
 | **Receipts and payment history** | Saves the payment’s receipt reference automatically. The history can reopen the printable receipt and display who posted the payment, its date and method, and the charge balance immediately after posting. A reversed receipt remains visible with its status. |
 | **Reversal request** | An owner or cashier enters a reason against an existing payment. A pending request appears in the owner queue while the balance stays the same. A rejected request remains visible in the payment’s history. |
 | **Reversals** | The owner can approve or reject a pending request. Approval reopens the affected charge’s balance and records who approved it and when. Rejection retains the original posting. |
-| **Reports** | Shows daily amounts by collector and method, with individual payment and reversal activity. Dates use Asia/Manila time. A payment posted on one day and reversed on another appears in the corresponding days. |
+| **Daily collections report** | Reconciles payments and approved reversals by collector and method. The activity shows the student, term, charge, receipt, and, for an approved reversal, who approved it and why it was requested. Reports use Asia/Manila business dates. |
+| **Tuition balances report** | Shows the owner who still owes a dated installment. It lists each student, term, installment, due date, remaining balance, and status. It opens on overdue installments and can include all outstanding installments. |
 | **CSV export** | **Download CSV** obtains a server-generated attachment for the selected day. Its breakdown and totals match the JSON report, and the spreadsheet displays amounts in pesos. |
 | **Partner Records** | Shows the owner the latest Inventory payables and Faculty workload snapshots. Inventory submissions can be approved, rejected, or marked settled with a disbursement reference. Faculty submissions can be marked reviewed. |
 | **Faculty Payroll** | Prepares one run per period from reviewed workloads and approved hourly rates. Calculates gross and net pay with approved additions and deductions. Finalization locks the amounts and makes printable payslips available. |
 | **Payroll settlement** | Records confirmation of a completed external payout batch. Checks that the submitted amount equals the finalized net payroll total and stores its unique settlement reference. |
 | **Health and Swagger** | The health endpoint confirms the API process is responding. Swagger lists API operations and their request formats. The health response is a basic liveness check. |
+
+### What the main records mean
+
+- **Enrollment** identifies one student in one academic term. It groups their Finance charges and payments for that term.
+- **Assessed** is the amount charged. **Outstanding** is the amount still owed after posted payments and approved reversals.
+- **Reversal** is an owner-reviewed correction to a payment posting. An approved reversal restores the payment amount to the charge and appears in collections on its approval date. Pending and rejected requests stay in reversal history and leave collections and balances unaffected.
+- **Payroll run** is the batch for one pay period. The owner imports or selects reviewed Faculty hours, applies approved rates and adjustments, then finalizes the draft. For example, 12.5 hours at ₱500 per hour, plus ₱250 and minus ₱100, produces ₱6,400 net pay. Finalization locks the amounts and makes payslips available. **Settlement** means the school has paid externally and Finance has recorded the matching reference.
+- **Partner Record** is a submission from another system. A reviewed Faculty workload can feed into a payroll draft. An Inventory payable records the amount owed to a supplier for received goods. The owner can approve or reject it and record settlement after an external payout.
+
+### Enter and follow up on tuition installments
+
+1. In **Students**, click **Add charge** for the correct enrollment. Enter a unique reference, choose the installment, and enter its assessed amount and due date. Repeat for the school's four installments as needed.
+2. Use the school's assigned dates and amounts. For example, a ₱20,000 term could have four ₱5,000 charges if the school approved that schedule. A full-term charge already in the ledger stays separate. Check the existing charges before entering an installment schedule for that term.
+3. Record partial payments in **Payments** against the applicable installment. A ₱2,000 payment against a ₱5,000 installment leaves ₱3,000. It appears under **Reports → Tuition balances** after the due date if the ₱3,000 is still unpaid. The due date itself is **Due today**.
+4. **All outstanding** includes due-today and upcoming installments. Fully paid installments drop out of this report. An approved reversal returns a balance to the report if the charge is unpaid again.
 
 ### What the five partner APIs do
 
@@ -170,6 +187,7 @@ All paths below are relative to `http://localhost:5000/api/v1`. **Session** mean
 | `GET /ledger/reversals` | Owner | Lists pending reversal requests. |
 | `GET /ledger/reports/daily?date=YYYY-MM-DD` | Session | Returns daily JSON totals in centavos, group breakdown and individual entries. |
 | `GET /ledger/reports/daily.csv?date=YYYY-MM-DD` | Session | Downloads daily grouped totals as a CSV in pesos, using the same access rules. |
+| `GET /ledger/reports/tuition?status=overdue&page=1` | Owner | Lists current unpaid installments ordered by due date. Use `status=outstanding` to include upcoming and due-today installments. |
 | `GET /ledger/partner-items` | Owner | Lists the latest Inventory and Faculty submissions. |
 | `PATCH /ledger/partner-items/:id` | Owner | Records a receiving-payable or workload decision. |
 

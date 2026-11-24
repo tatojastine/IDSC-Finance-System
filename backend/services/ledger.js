@@ -10,6 +10,8 @@ class FinanceError extends Error {
 }
 
 const methods = ["Cash", "Bank Transfer", "Online Payment", "Other"];
+const installments = ["prelim", "midterm", "pre-finals", "finals"];
+const manilaDay = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Manila", dateStyle: "short" });
 const identifierPattern = /^[\p{L}\p{N}][\p{L}\p{N} ._/-]*$/u;
 
 function readText(value, field, limit = 100, required = true) {
@@ -66,6 +68,7 @@ function publicCharge(charge) {
     outstandingMinor: outstanding(charge),
     source: charge.source,
     reference: charge.reference,
+    ...(charge.tuitionInstallment && { tuitionInstallment: charge.tuitionInstallment, dueDate: charge.dueDate }),
     payments: charge.payments.map(publicPayment)
   };
 }
@@ -119,6 +122,12 @@ async function createCharge(body, actor, source = "finance") {
     createdBy: actor.email,
     key: source === "library" ? `library:${reference}` : `finance:${enrollment._id}:${reference}`
   };
+  if (source === "finance" && (body.tuitionInstallment !== undefined || body.dueDate !== undefined)) {
+    if (!installments.includes(body.tuitionInstallment)) throw new FinanceError(400, "Choose a tuition installment.");
+    calendarDate(body.dueDate);
+    data.tuitionInstallment = body.tuitionInstallment;
+    data.dueDate = body.dueDate;
+  }
   try {
     const charge = await Charge.create(data);
     return { charge: publicCharge(charge.toObject()), created: true };
@@ -126,9 +135,11 @@ async function createCharge(body, actor, source = "finance") {
     if (error.code !== 11000) throw error;
     const existing = await Charge.findOne({ key: data.key }).lean();
     if (existing && String(existing.enrollmentId) === String(data.enrollmentId) &&
-        existing.label === data.label && existing.amountMinor === data.amountMinor) {
+        existing.label === data.label && existing.amountMinor === data.amountMinor &&
+        existing.tuitionInstallment === data.tuitionInstallment && existing.dueDate === data.dueDate) {
       return { charge: publicCharge(existing), created: false };
     }
+    if (!existing && data.tuitionInstallment) throw new FinanceError(409, "This tuition installment already exists for the term.");
     throw new FinanceError(409, "This charge reference already exists with different details.");
   }
 }
@@ -226,7 +237,7 @@ async function findReceipt(paymentId) {
   };
 }
 
-async function dailyReport(date, account) {
+function calendarDate(date) {
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new FinanceError(400, "Choose a date in YYYY-MM-DD format.");
   }
@@ -234,26 +245,70 @@ async function dailyReport(date, account) {
   if (Number.isNaN(+midnightUtc) || midnightUtc.toISOString().slice(0, 10) !== date) {
     throw new FinanceError(400, "Choose a valid calendar date.");
   }
+  return midnightUtc;
+}
+
+async function tuitionBalances(status, page) {
+  if (!["overdue", "outstanding"].includes(status)) throw new FinanceError(400, "Choose a supported tuition filter.");
+  if (!Number.isSafeInteger(page) || page < 1 || page > 10000) throw new FinanceError(400, "Invalid tuition report page.");
+  const today = manilaDay.format(new Date());
+  const dueDate = { $type: "string", ...(status === "overdue" && { $lt: today }) };
+  const pageSize = 25;
+  const rows = [];
+  let matched = 0;
+  const charges = Charge.find({ dueDate }).sort({ dueDate: 1, _id: 1 }).lean().cursor();
+  for await (const charge of charges) {
+    const outstandingMinor = outstanding(charge);
+    if (outstandingMinor <= 0) continue;
+    if (matched++ < (page - 1) * pageSize) continue;
+    rows.push({
+      chargeId: String(charge._id), enrollmentId: String(charge.enrollmentId), label: charge.label,
+      tuitionInstallment: charge.tuitionInstallment, dueDate: charge.dueDate,
+      amountMinor: charge.amountMinor, outstandingMinor
+    });
+    if (rows.length > pageSize) {
+      await charges.close();
+      break;
+    }
+  }
+  const hasMore = rows.length > pageSize;
+  const current = rows.slice(0, pageSize);
+  const enrollments = await Enrollment.find({ _id: { $in: current.map((row) => row.enrollmentId) } })
+    .select("studentId name term").lean();
+  const students = new Map(enrollments.map((enrollment) => [String(enrollment._id), enrollment]));
+  return {
+    today, timezone: "Asia/Manila", hasMore,
+    rows: current.map((row) => {
+      const enrollment = students.get(row.enrollmentId);
+      return { ...row, studentId: enrollment?.studentId ?? "", studentName: enrollment?.name ?? "", term: enrollment?.term ?? "" };
+    })
+  };
+}
+
+async function dailyReport(date, account) {
+  const midnightUtc = calendarDate(date);
   const start = new Date(+midnightUtc - 8 * 60 * 60 * 1000);
   const end = new Date(+start + 24 * 60 * 60 * 1000);
   const window = { $gte: start, $lt: end };
   const charges = await Charge.find({
     $or: [{ "payments.postedAt": window }, { "payments.reversals.decidedAt": window }]
-  }).lean();
+  }).populate("enrollmentId", "studentId name term").lean();
   const rows = [];
   for (const charge of charges) {
     for (const payment of charge.payments) {
       if (account.role !== "owner" && payment.postedActorId !== account.id) continue;
       const row = {
         paymentId: payment._id, receiptNumber: `FIN-${payment._id.toUpperCase()}`,
-        postedBy: payment.postedBy, method: payment.method, amountMinor: payment.amountMinor
+        postedBy: payment.postedBy, method: payment.method, amountMinor: payment.amountMinor,
+        studentId: charge.enrollmentId?.studentId, studentName: payment.studentName || charge.enrollmentId?.name,
+        term: charge.enrollmentId?.term, charge: charge.label
       };
       if (payment.postedAt >= start && payment.postedAt < end) {
         rows.push({ ...row, type: "collection", at: payment.postedAt });
       }
       const reversal = approvedReversal(payment);
       if (reversal?.decidedAt >= start && reversal.decidedAt < end) {
-        rows.push({ ...row, type: "reversal", at: reversal.decidedAt, decidedBy: reversal.decidedBy });
+        rows.push({ ...row, type: "reversal", at: reversal.decidedAt, decidedBy: reversal.decidedBy, reason: reversal.reason });
       }
     }
   }
@@ -294,5 +349,5 @@ function dailyReportCsv(report) {
 module.exports = {
   FinanceError, readText, readReference, readAmount, objectId, methods,
   createEnrollment, getEnrollment, getAccount, createCharge, postPayment, changeReversal,
-  findReceipt, dailyReport, dailyReportCsv, publicCharge, outstanding
+  findReceipt, dailyReport, dailyReportCsv, tuitionBalances, publicCharge, outstanding
 };

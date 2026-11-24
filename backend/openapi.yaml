@@ -310,7 +310,9 @@ paths:
           schema: { type: string }
       responses:
         "200": { description: Success }
+        "400": { description: Invalid enrollment ID }
         "401": { description: Session or partner token required }
+        "404": { description: Enrollment not found }
   /api/v1/ledger/charges:
     post:
       tags: [Ledger]
@@ -327,11 +329,17 @@ paths:
                 label: { type: string }
                 reference: { type: string }
                 amountMinor: { type: integer }
+                tuitionInstallment:
+                  type: string
+                  enum: [prelim, midterm, pre-finals, finals]
+                  description: Optional tuition installment type. Supply dueDate with it.
+                dueDate: { type: string, format: date, description: Manila calendar due date for a tuition installment }
       responses:
         "201": { description: Success }
         "401": { description: Session or partner token required }
         "200": { description: Previously accepted request }
         "400": { description: Invalid request }
+        "403": { description: Owner role required }
         "409": { description: Record or state conflict }
   /api/v1/ledger/payments:
     post:
@@ -468,6 +476,28 @@ paths:
               schema: { type: string, format: binary }
         "400": { description: Missing or invalid business date }
         "401": { description: Active Finance session required }
+  /api/v1/ledger/reports/tuition:
+    get:
+      tags: [Ledger]
+      summary: List overdue or outstanding tuition installments (owner)
+      description: Returns current unpaid balances. A charge becomes overdue after its due date in Asia/Manila.
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [overdue, outstanding], default: overdue }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 10000, default: 1 }
+      responses:
+        "200":
+          description: Up to 25 tuition installments ordered by due date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TuitionBalanceReport"
+        "400": { description: Invalid filter or page }
+        "401": { description: Active Finance session required }
+        "403": { description: Owner role required }
   /api/v1/ledger/partner-items:
     get:
       tags: [Ledger]
@@ -1425,10 +1455,39 @@ components:
               receiptNumber: { type: string }
               postedBy: { type: string }
               decidedBy: { type: string, description: Approval actor for a reversal }
+              reason: { type: string, description: Request reason for an approved reversal }
+              studentId: { type: string }
+              studentName: { type: string }
+              term: { type: string }
+              charge: { type: string }
               method: { type: string }
               amountMinor: { type: integer }
               type: { type: string, enum: [collection, reversal] }
               at: { type: string, format: date-time }
+    TuitionBalanceReport:
+      type: object
+      required: [today, timezone, hasMore, rows]
+      properties:
+        today: { type: string, format: date }
+        timezone: { type: string, example: Asia/Manila }
+        hasMore: { type: boolean }
+        rows:
+          type: array
+          maxItems: 25
+          items:
+            type: object
+            required: [chargeId, enrollmentId, studentId, studentName, term, label, tuitionInstallment, dueDate, amountMinor, outstandingMinor]
+            properties:
+              chargeId: { type: string }
+              enrollmentId: { type: string }
+              studentId: { type: string }
+              studentName: { type: string }
+              term: { type: string }
+              label: { type: string }
+              tuitionInstallment: { type: string, enum: [prelim, midterm, pre-finals, finals] }
+              dueDate: { type: string, format: date }
+              amountMinor: { type: integer, description: Assessed amount in centavos }
+              outstandingMinor: { type: integer, description: Unpaid balance in centavos }
     LedgerReceipt:
       type: object
       required: [_id, receiptNumber, status, studentId, studentName, term, charge, amountMinor, method, postedAt, postedBy, balanceAfterMinor, reversals]

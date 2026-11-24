@@ -146,6 +146,62 @@ test("finance workflow and all five partner contracts", { skip: !mongoUri }, asy
     const workloadPath = "/ledger/partner-items/" + items.find((item) => item.partner === "faculty")._id;
     status(await send("PATCH", workloadPath, { action: "review" }, owner), 200);
     assert.equal(status(await send("GET", "/integrations/faculty/workloads/FAC-01", null, partner("faculty")), 200).status, "reviewed");
+
+    const tuition = { ...assessment, label: "Prelim tuition", reference: "PRELIM-01", tuitionInstallment: "prelim", dueDate: "2000-01-01" };
+    status(await send("POST", "/ledger/charges", { ...tuition, dueDate: "2025-02-29" }, owner), 400);
+    const installment = status(await send("POST", "/ledger/charges", tuition, owner), 201);
+    assert.equal(installment.dueDate, tuition.dueDate);
+    status(await send("POST", "/ledger/charges", tuition, owner), 200);
+    status(await send("POST", "/ledger/charges", { ...tuition, dueDate: "2000-01-02" }, owner), 409);
+    status(await send("POST", "/ledger/charges", { ...tuition, reference: "ANOTHER-PRELIM" }, owner), 409);
+    status(await send("POST", "/ledger/charges", {
+      ...tuition, label: "Midterm tuition", reference: "MIDTERM-01", tuitionInstallment: "midterm", dueDate: date
+    }, owner), 201);
+
+    const tuitionPath = "/ledger/reports/tuition";
+    status(await send("GET", tuitionPath, null, operator), 403);
+    status(await send("GET", tuitionPath + "?status=unknown", null, owner), 400);
+    const overdue = async () => status(await send("GET", tuitionPath, null, owner), 200).rows;
+    const initialOverdue = await overdue();
+    assert.equal(initialOverdue.length, 1);
+    assert.equal(initialOverdue[0].studentId, "DEMO-001");
+    assert.equal(initialOverdue[0].outstandingMinor, 1000000);
+    const allTuition = status(await send("GET", tuitionPath + "?status=outstanding", null, owner), 200);
+    assert.deepEqual(allTuition.rows.map((row) => row.tuitionInstallment), ["prelim", "midterm"]);
+
+    const tuitionPayment = status(await send("POST", "/ledger/payments", {
+      ...partial, chargeId: installment.id, requestId: "PRELIM-PAY-01"
+    }, operator), 201);
+    assert.equal((await overdue())[0].outstandingMinor, 600000);
+    status(await send("POST", "/ledger/payments", {
+      ...partial, chargeId: installment.id, amountMinor: 600000, requestId: "PRELIM-PAY-02"
+    }, operator), 201);
+    assert.equal((await overdue()).length, 0);
+    const tuitionReversal = "/ledger/payments/" + tuitionPayment._id + "/reversal";
+    status(await send("POST", tuitionReversal + "s", { reason: "Tuition posting correction" }, operator), 201);
+    assert.equal((await overdue()).length, 0);
+    status(await send("PATCH", tuitionReversal, { status: "approved" }, owner), 200);
+    assert.equal((await overdue())[0].outstandingMinor, 400000);
+    const activity = status(await send("GET", reportPath, null, owner), 200).rows
+      .find((row) => row.type === "reversal" && row.paymentId === tuitionPayment._id);
+    assert.equal(activity.studentId, "DEMO-001");
+    assert.equal(activity.charge, "Prelim tuition");
+    assert.equal(activity.reason, "Tuition posting correction");
+
+    const extraEnrollments = await models.Enrollment.insertMany(Array.from({ length: 25 }, (_, index) => ({
+      studentId: `PAGE-${index}`, name: `Page Student ${index}`, term: registrarInput.term, program: "BSIT", source: "finance"
+    })));
+    await models.Charge.insertMany(extraEnrollments.map((extra, index) => ({
+      enrollmentId: extra._id, key: `tuition-page-charge-${index}`, label: "Finals tuition",
+      tuitionInstallment: "finals", dueDate: "2000-01-02", amountMinor: 500000
+    })));
+    const firstPage = status(await send("GET", tuitionPath, null, owner), 200);
+    const secondPage = status(await send("GET", tuitionPath + "?page=2", null, owner), 200);
+    assert.equal(firstPage.hasMore, true);
+    assert.equal(firstPage.rows.length, 25);
+    assert.equal(secondPage.hasMore, false);
+    assert.equal(secondPage.rows.length, 1);
+    assert.equal(new Set([...firstPage.rows, ...secondPage.rows].map((row) => row.chargeId)).size, 26);
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
     try { await mongoose.connection.dropDatabase(); } finally { await mongoose.disconnect(); }
