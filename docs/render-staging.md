@@ -1,53 +1,53 @@
-# Finance staging on Render and MongoDB Atlas
+# Set up Finance on Render and MongoDB Atlas
 
-Use this setup for a hosted classroom demo with fictional records. A single Render service serves the compiled React dashboard and the Express API on the same HTTPS origin. Atlas stores the demo records across service restarts.
+Use this guide to deploy a new classroom demo with its own database. If you already have an account on the [existing Finance site](https://idsc-finance-system.onrender.com/), open the site and sign in. Start with the [VS Code instructions](../README.md#run-finance-in-vs-code) to run Finance on your own computer.
 
-## 1. Prepare Atlas
+## 1. Prepare the database in MongoDB Atlas
 
-1. Create a staging cluster and a database user with read/write access to the Finance staging database, such as `idsc_finance_staging`.
-2. Copy the Atlas driver connection string and set its database name to `idsc_finance_staging`. Keep the connection string private.
-3. After creating the Render service, open **Connect → Outbound** in its dashboard. Add the listed ranges to the Atlas project’s IP access list. [Atlas connection guide](https://www.mongodb.com/docs/atlas/connect-to-database-deployment/) · [Render outbound network guide](https://render.com/docs/outbound-ip-addresses)
+1. Create an Atlas cluster and a database user with read and write access to a database such as `idsc_finance_staging`.
+2. In Atlas, open **Connect → Drivers**. Copy the connection string, replace the password placeholder with the database user's password, and set the database name in the URI. Keep the full connection string private. [Atlas connection guide](https://www.mongodb.com/docs/atlas/connect-to-database-deployment/)
+3. When the Render service is available, find its outbound IP ranges and add them to the Atlas project's **Network Access** list. This lets Render reach your database. [Render outbound network guide](https://render.com/docs/outbound-ip-addresses)
 
 ## 2. Create the Render Web Service
 
-In Render, choose **New → Web Service**, connect `tatojastine/IDSC-Finance-System` through GitHub, select `main`, and leave **Root Directory** blank. Render needs the root Dockerfile on that branch to build successfully. [Render Docker guide](https://render.com/docs/docker)
+1. In Render, choose **New → Web Service**, select your GitHub copy of this repository, and choose the `main` branch.
+2. Select **Docker** for the runtime. Leave **Root Directory** and **Docker Command** blank and use `./Dockerfile` as the Dockerfile path. Set **Health Check Path** to `/api/v1/ready`.
+3. Add the environment variables below. Once the service is created, you can find these settings under **Environment** in the service's sidebar.
 
-| Setting | Value |
+| Key | What to enter |
 |---|---|
-| Runtime | Docker |
-| Dockerfile Path | `./Dockerfile` |
-| Docker Command | Leave blank to use the Dockerfile command |
-| Auto-Deploy | Off. GitHub Actions starts deploys after tests. |
-| Health Check Path | `/api/v1/ready` |
-| `MONGODB_URI` | Your private Atlas driver connection string for the staging database |
-| `JWT_SECRET` | A private random signing key of at least 32 bytes. Keep it stable across deploys. |
-| `OWNER_SETUP_KEY` | Your private random first-run key, at least 32 characters |
-| `APP_ORIGIN` | Set only if you use a custom HTTPS origin. Otherwise Finance uses Render’s `RENDER_EXTERNAL_URL`. |
+| `MONGODB_URI` | Your Atlas connection string from step 1. |
+| `JWT_SECRET` | A private random value generated with the command below. The server uses it to sign sessions. Keep it stable across deploys. |
+| `OWNER_SETUP_KEY` | A second random value generated separately. This is the value you enter to create the first owner. |
+| `APP_ORIGIN` | Your public HTTPS origin if you use a custom domain. For a standard Render URL, the app reads Render's `RENDER_EXTERNAL_URL`. |
 
-The container uses Node 24, serves the built frontend and binds to `0.0.0.0`. Render's **Environment** settings hold the database URI and both keys. [Render environment variables](https://render.com/docs/environment-variables)
-
-Run this command twice to generate two independent values, one for `OWNER_SETUP_KEY` and one for `JWT_SECRET`.
+Run this command in a terminal with Node.js installed. Run it once for `JWT_SECRET` and a second time for `OWNER_SETUP_KEY`. Each run prints a new 64-character value.
 
 ```powershell
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-Keep both keys and the owner password private. The server blocks first-run hosted owner creation when the setup key is missing or incorrect. Changing the JWT signing key requires everyone to sign in again.
+Keep the connection string and both generated values private. Save the new service and wait until its first deployment is live. For an existing service that needs the key before first-time setup, open **Environment → Add variable**, set **Key** to `OWNER_SETUP_KEY`, and paste your generated value into **Value**. Choose **Save and deploy** and wait for the service to finish updating. [Render environment variables](https://render.com/docs/configure-environment-variables)
 
 ## 3. Connect GitHub Actions
 
-1. In GitHub, open **Settings → Secrets and variables → Actions**. Add the Render service’s Settings → Deploy Hook URL as the repository secret `RENDER_DEPLOY_HOOK_URL`. Add the service’s public HTTPS origin as the repository variable `FINANCE_LIVE_URL`. [Render deploy hooks](https://render.com/docs/deploy-hooks)
-2. Protect `main` and require pull requests with one teammate approval and the `test` status check. Once the workflow has appeared in Actions, select the actual check in the branch rule. [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
-3. Push the work branch, have a teammate review the PR, verify the PR test job, and merge. The resulting `main` run must show successful `test` and `deploy` jobs. The deploy job requests that exact tested commit and waits until the public readiness endpoint responds with its SHA. Add the working URL to the repository README through a reviewed PR.
+1. In Render, open the service's **Settings** and copy its **Deploy Hook** URL. In GitHub, open the repository's **Settings → Secrets and variables → Actions**. Add the hook URL as the secret `RENDER_DEPLOY_HOOK_URL` and the public Render URL as the variable `FINANCE_LIVE_URL`. [Render deploy hooks](https://render.com/docs/deploy-hooks)
+2. Set Render **Auto-Deploy** to **Off** so the workflow controls releases after testing.
+3. Protect `main` with pull requests, one teammate approval, and the required `test` check. After a reviewed merge, look under **Actions** for successful **test** and **deploy** jobs. The deploy job verifies that the tested commit is online and can reach MongoDB.
+4. If the workflow ran before you saved the hook and URL, open the latest failed `main` run and select **Re-run failed jobs** after adding both values.
 
-If the first merge is needed to make the Dockerfile available to Render, the test job can pass before hosting exists. The deploy job will fail until the service and both GitHub values exist. Complete the setup, then use **Re-run failed jobs** on the latest `main` run.
+## 4. Create the first owner
 
-## 4. Verify the hosted app
+1. Open your new Render site. On a fresh database, you should see **Create the owner account**.
+2. Enter your email and a password of at least 12 characters. In **Owner setup key**, paste the value stored under `OWNER_SETUP_KEY` on that Render service.
+3. Select **Create owner account** and save the one-time recovery code somewhere private. The recovery code is used with **Forgot password?**.
+4. Sign in with your owner email and password. The setup key is only used during first-time registration. If the site opens at **Sign in to Finance**, an owner already exists for that database.
 
-1. Visit the Render HTTPS URL. The browser should show **Create the owner account** on a fresh database. Enter the setup key and create the owner. Save the one-time recovery code privately. Once the owner exists, remove `OWNER_SETUP_KEY` from Render if desired and confirm the owner can still sign in after the service redeploys.
-2. Visit `/api/v1/ready`. It should respond with `{"status":"ready"}`. A `503` indicates that Finance could not reach MongoDB. Use Render logs and check Atlas credentials and the IP access list.
-3. Sign in as the owner, approve a fictional cashier, add a ₱10,000 charge, and record ₱4,000. Reopen the receipt and check that ₱6,000 remains due. Restart the service and check that the receipt, balance, and report are still present.
-4. Finalize a fictional payroll run and open the payslip. Confirm the cashier account cannot open Faculty Payroll. After the owner signs in, open Swagger UI at `/docs/` and download its deployed contract from `/docs/openapi.yaml`.
-5. Share the staging URL after those checks. The Render URL can be publicly reachable. Finance records require an active account and cashier requests require owner approval.
+If Finance asks for a valid setup key, check that you copied the exact `OWNER_SETUP_KEY` value and that Render has finished deploying the environment change. If you manage the service and lost the value before the owner was created, generate a new value, update `OWNER_SETUP_KEY` in Render, and use it after the deployment finishes. Public GitHub stores the instructions. The key itself is stored in Render.
 
-Local development still uses the Vite development server and the loopback database when those are the configured defaults. For a production-mode smoke test on your machine, build the frontend before running the backend suite with `FINANCE_TEST_MONGO`. That suite connects to a disposable database and tests protected owner setup, secure cookie headers, compiled assets, and the database readiness endpoint.
+## 5. Check that it works
+
+1. Open `/api/v1/ready` on your public Render URL. It should return `{"status":"ready"}`. A 503 means the database is unavailable. Check the Atlas connection string and IP access list, then check the Render logs.
+2. Sign in as owner. If you are testing cashier registration, register with a fictional cashier account and approve it in **Cashier Accounts**.
+3. In the demo database, add a fictional charge and record a partial payment. Reopen the receipt and verify the remaining balance.
+4. While signed in as owner, open `/docs/` for Swagger UI. The deployed contract is also available at `/docs/openapi.yaml`.
